@@ -7,8 +7,8 @@ description = "Utilities for Call Center simulation and optimal staffing."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/jCodingStuff/opencct"
 documentation = "https://docs.rs/opencct"
-keywords = ["call center", "cct", "simulation", "staffing", "optimization"]
-categories = ["development-tools", "algorithms", "simulation", "scientific-computing"]
+keywords = ["call", "center", "simulation", "staffing", "optimization"]
+categories = ["algorithms", "simulation", "mathematics"]
 readme = "README.md"
 
 [dependencies]
