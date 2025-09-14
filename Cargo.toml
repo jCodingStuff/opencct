@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/jCodingStuff/opencct"
 documentation = "https://docs.rs/opencct"
 keywords = ["call", "center", "simulation", "staffing", "optimization"]
-categories = ["development-tools", "algorithms", "simulation", "scientific-computing"]
+categories = ["algorithms", "simulation", "mathematics"]
 readme = "README.md"
 
 [dependencies]
