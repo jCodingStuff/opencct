@@ -23,7 +23,9 @@ pub trait Distribution {
 }
 
 pub mod uniform;
-pub use uniform::UniformTV;
 pub use uniform::Uniform;
+pub use uniform::UniformTV;
+
 pub mod exponential;
-// pub use exponential::Exponential;
+pub use exponential::Exponential;
+pub use exponential::ExponentialTV;
