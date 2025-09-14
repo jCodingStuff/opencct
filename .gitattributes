@@ -1,0 +1,21 @@
+# Rust source files
+*.rs       text eol=lf
+
+# Python source files
+*.py       text eol=lf
+
+# Shell scripts
+*.sh       text eol=lf
+
+# TOML files
+*.toml     text eol=lf
+
+# Markdown files
+*.md       text eol=lf
+
+# Plain text files
+*.txt      text eol=lf
+
+# Specific project files
+LICENSE    text eol=lf
+Cargo.lock text eol=lf
