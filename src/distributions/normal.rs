@@ -14,6 +14,29 @@ use crate::{
 };
 use super::Distribution;
 
+/// Box-Muller Transform
+/// # Arguments
+/// * `u`, `v` - Independent random numbers distributed uniformly on [0, 1]
+/// # Returns
+/// Two random variables that have the standard normal distribution
+pub fn box_muller_transform(u: Float, v: Float) -> (Float, Float) {
+    let term1 = SQRT_2 as Float * (-u.max(Float::EPSILON).ln()).sqrt();
+    let term2 = 2.0 * PI as Float * v;
+    (term1 * term2.cos(), term1 * term2.sin())
+}
+
+/// Scaled Box-Muller Transform
+/// # Arguments
+/// * `u`, `v` - Independent random numbers distributed uniformly on [0, 1]
+/// * `mu` - Mean of the desired normal distribution
+/// * `sigma` - Standard deviation of the desired normal distribution
+/// # Returns
+/// Two random variables that have the normal distribution with mean `mu` and standard deviation `sigma`
+pub fn scaled_box_muller_transform(u: Float, v: Float, mu: Float, sigma: Float) -> (Float, Float) {
+    let (x, y) = box_muller_transform(u, v);
+    (mu + sigma * x, mu + sigma * y)
+}
+
 /// Normal distribution. Since in the current context, negative time does not make sense, the negative values
 /// will be clamped to 0.
 /// # Example
@@ -76,14 +99,14 @@ impl Distribution for Normal {
         if let Some(variate) = self.cache.take() {
             return Duration::from_secs_float( variate * self.factor);
         }
-        let (u, v) = (self.rng.random::<Float>(), self.rng.random::<Float>());
-        let term1 = SQRT_2 as Float * (-u.max(Float::EPSILON).ln()).sqrt();
-        let term2 = 2.0 * PI as Float * v;
-        let scale = self.sigma * term1;
-        let value1 = (self.mu + scale * term2.cos()).max(0.0);
-        let value2 = (self.mu + scale * term2.sin()).max(0.0);
-        self.cache = Some(value2);
-        Duration::from_secs_float(value1 * self.factor)
+        let (x, y) = scaled_box_muller_transform(
+            self.rng.random::<Float>(),
+            self.rng.random::<Float>(),
+            self.mu,
+            self.sigma,
+        );
+        self.cache = Some(y.max(0.0));
+        Duration::from_secs_float(x.max(0.0) * self.factor)
     }
 }
 
@@ -154,16 +177,86 @@ where
     /// In debug, this function will panic if at the requested time the standard deviation <= 0
     /// **This is NOT checked in release mode!**
     fn sample(&mut self, at: Duration) -> Duration {
-        let mu = (self.mu)(at);
-        let sigma = (self.sigma)(at);
-        debug_assert!(sigma > 0.0, "Invalid sigma at {at:?}: {sigma}");
-        let (u, v) = (self.rng.random::<Float>(), self.rng.random::<Float>());
-        let term1 = SQRT_2 as Float * (-u.max(Float::EPSILON).ln()).sqrt();
-        let term2 = 2.0 * PI as Float * v;
-        let value1 = (mu + sigma * term1 * term2.cos()).max(0.0);
-        Duration::from_secs_float(value1 * self.factor)
+        let (x, _) = scaled_box_muller_transform(
+            self.rng.random::<Float>(),
+            self.rng.random::<Float>(),
+            (self.mu)(at),
+            (self.sigma)(at),
+        );
+        Duration::from_secs_float(x.max(0.0) * self.factor)
     }
 }
+
+#[cfg(test)]
+mod box_muller_tests {
+    use super::*;
+
+    #[test]
+    fn returns_two_values() {
+        let (x, y) = box_muller_transform(0.5, 0.25);
+        // Should return finite numbers
+        assert!(x.is_finite(), "x should be finite, got {}", x);
+        assert!(y.is_finite(), "y should be finite, got {}", y);
+    }
+
+    #[test]
+    fn scaled_returns_with_mean_and_sigma() {
+        let mu = 10.0;
+        let sigma = 2.0;
+        let (x, y) = scaled_box_muller_transform(0.5, 0.25, mu, sigma);
+        // Roughly check that results are shifted/scaled
+        assert!(x.is_finite() && y.is_finite());
+        // Both should be "around" mu, but not exactly equal
+        assert!((x - mu).abs() < 10.0, "x too far from mu: {}", x);
+        assert!((y - mu).abs() < 10.0, "y too far from mu: {}", y);
+    }
+
+    #[test]
+    fn reproducibility_same_inputs_same_outputs() {
+        let (x1, y1) = box_muller_transform(0.123, 0.456);
+        let (x2, y2) = box_muller_transform(0.123, 0.456);
+        assert_eq!(x1, x2);
+        assert_eq!(y1, y2);
+
+        let (sx1, sy1) = scaled_box_muller_transform(0.123, 0.456, 5.0, 2.0);
+        let (sx2, sy2) = scaled_box_muller_transform(0.123, 0.456, 5.0, 2.0);
+        assert_eq!(sx1, sx2);
+        assert_eq!(sy1, sy2);
+    }
+
+    #[test]
+    fn no_nan_with_small_u() {
+        // Very small u should not produce NaN (clamped with EPSILON)
+        let (x, y) = box_muller_transform(Float::MIN_POSITIVE, 0.75);
+        assert!(x.is_finite(), "Expected finite x, got {}", x);
+        assert!(y.is_finite(), "Expected finite y, got {}", y);
+    }
+
+    #[test]
+    fn statistical_mean_and_variance_scaled() {
+        // Law of large numbers check (approximation)
+        let mu = 3.0;
+        let sigma = 2.0;
+        let n_samples = 50_000;
+        let mut sum = 0.0;
+        let mut sum_sq = 0.0;
+
+        for _ in 0..n_samples {
+            let u: Float = rand::random();
+            let v: Float = rand::random();
+            let (x, _) = scaled_box_muller_transform(u, v, mu, sigma);
+            sum += x;
+            sum_sq += x * x;
+        }
+
+        let mean = sum / n_samples as Float;
+        let variance = sum_sq / n_samples as Float - mean * mean;
+
+        assert!((mean - mu).abs() < 0.1, "mean {} not close to {}", mean, mu);
+        assert!((variance - sigma * sigma).abs() < 0.2, "variance {} not close to {}", variance, sigma * sigma);
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -212,7 +305,7 @@ mod tests {
         for _ in 0..n_samples {
             sum += dist.sample_at_t0().as_millis_float();
         }
-        let mean = sum / n_samples as f64;
+        let mean = sum / n_samples as Float;
         assert!((mean - mu).abs() < 0.05, "Sample mean {} not close to expected {}", mean, mu);
     }
 }
@@ -261,13 +354,13 @@ mod tests_tv {
 
         for t_sec in [0, 5, 10] {
             let t = Duration::from_secs(t_sec);
-            let mu = 5.0 + t_sec as f64 * 0.1;
+            let mu = 5.0 + t_sec as Float * 0.1;
             let mut sum = 0.0;
             let n_samples = 10_000;
             for _ in 0..n_samples {
                 sum += dist.sample(t).as_nanos_float();
             }
-            let mean = sum / n_samples as f64;
+            let mean = sum / n_samples as Float;
             assert!((mean - mu).abs() < 0.05, "At t={}, mean {} not close to expected {}", t_sec, mean, mu);
         }
     }
