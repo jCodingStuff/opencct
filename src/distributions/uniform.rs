@@ -7,7 +7,10 @@ use rand::{
     SeedableRng,
 };
 
-use crate::Float;
+use crate::{
+    time::{DurationExtension, TimeUnit},
+    Float,
+};
 use super::Distribution;
 
 /// Uniform distribution.
@@ -15,18 +18,21 @@ use super::Distribution;
 /// ```
 /// use std::time::Duration;
 /// use opencct::distributions::{Distribution, Uniform};
+/// use opencct::time::TimeUnit;
 ///
-/// let mut dist = Uniform::new(1.0, 3.0);
+/// let mut dist = Uniform::new(1.0, 3.0, TimeUnit::Seconds);
 /// let sample = dist.sample_at_t0();
-/// println!("Sampled value: {}", sample);
+/// println!("Sampled value: {:?}", sample);
 /// ```
 pub struct Uniform {
     /// Minimum value
-    min: Float,
+    min     : Float,
     /// Maximum value
-    max: Float,
+    max     : Float,
+    /// Time unit factor
+    factor  : Float,
     /// Random number generator
-    rng: StdRng,
+    rng     : StdRng,
 }
 
 impl Uniform {
@@ -34,33 +40,36 @@ impl Uniform {
     /// # Arguments
     /// * `min` - Minimum value.
     /// * `max` - Maximum value.
+    /// * `unit` - The [TimeUnit] that the distribution samples.
     /// # Returns
     /// * A new [Uniform].
     /// # Panic
     /// This function panics if `min > max` or if `min` or `max` is not positive
-    pub fn new(min: Float, max: Float) -> Self {
-        assert!(min <= max && min > 0.0 && max > 0.0, "Invalid range [{min}, {max}]");
-        Self { min, max, rng: StdRng::from_os_rng() }
+    pub fn new(min: Float, max: Float, unit: TimeUnit) -> Self {
+        assert!(min <= max && min >= 0.0, "Invalid range [{min}, {max}]");
+        Self { min, max, factor: unit.factor(), rng: StdRng::from_os_rng() }
     }
 
     /// Create a new [Uniform] distribution with a specified random seed.
     /// # Arguments
     /// * `min` - Minimum value.
     /// * `max` - Maximum value.
+    /// * `unit` - The [TimeUnit] that the distribution samples.
     /// * `seed` - Seed for the random number generator.
     /// # Returns
     /// A new [Uniform].
     /// # Panic
     /// This function panics if `min > max` or if `min` or `max` is not positive
-    pub fn new_seeded(min: Float, max: Float, seed: u64 ) -> Self {
-        assert!(min <= max && min > 0.0 && max > 0.0, "Invalid range [{min}, {max}]");
-        Self { min, max, rng: StdRng::seed_from_u64(seed) }
+    pub fn new_seeded(min: Float, max: Float, unit: TimeUnit, seed: u64) -> Self {
+        assert!(min <= max && min >= 0.0, "Invalid range [{min}, {max}]");
+        Self { min, max, factor: unit.factor(), rng: StdRng::seed_from_u64(seed) }
     }
 }
 
 impl Distribution for Uniform {
-    fn sample(&mut self, _: Duration) -> Float {
-        self.min + (self.max - self.min) * self.rng.random::<Float>()
+    fn sample(&mut self, _: Duration) -> Duration {
+        let raw = self.min + (self.max - self.min) * self.rng.random::<Float>();
+        Duration::from_secs_float(raw * self.factor)
     }
 }
 
@@ -69,19 +78,21 @@ impl Distribution for Uniform {
 /// ```
 /// use std::time::Duration;
 /// use opencct::distributions::{Distribution, UniformTV};
-/// use opencct::DurationExtension;
+/// use opencct::time::{TimeUnit, DurationExtension};
 ///
-/// let mut dist = UniformTV::new(|t| 1.0 + t.as_secs_float() * 0.1, |t| 3.0 + t.as_secs_float() * 0.1);
+/// let mut dist = UniformTV::new(|t| 1.0 + t.as_secs_float() * 0.1, |t| 3.0 + t.as_secs_float() * 0.1, TimeUnit::Seconds);
 /// let sample = dist.sample(Duration::from_secs(10));
-/// println!("Sampled value: {}", sample);
+/// println!("Sampled value: {:?}", sample);
 /// ```
 pub struct UniformTV<FMin, FMax> {
     /// Minimum value as a function of time
-    min: FMin,
+    min     : FMin,
     /// Maximum value as a function of time
-    max: FMax,
+    max     : FMax,
+    /// Time unit factor
+    factor  : Float,
     /// Random number generator
-    rng: StdRng,
+    rng     : StdRng,
 }
 
 impl<FMin, FMax> UniformTV<FMin, FMax>
@@ -93,25 +104,27 @@ where
     /// # Arguments
     /// * `min` - Function to compute the minimum bound at a given time. Must be > 0 and <= max for any t >= 0
     /// * `max` - Function to compute the maximum bound at a given time. Must be > 0 and >= min for any t >= 0
+    /// * `unit` - The [TimeUnit] that the distribution samples.
     /// # Returns
     /// A new [UniformTV].
     /// # Be careful!
     /// `min` and `max` bounds are not checked in release mode! Make sure you fulfill the bounds!
-    pub fn new(min: FMin, max: FMax) -> Self {
-        Self { min, max, rng: StdRng::from_os_rng() }
+    pub fn new(min: FMin, max: FMax, unit: TimeUnit) -> Self {
+        Self { min, max, factor: unit.factor(), rng: StdRng::from_os_rng() }
     }
 
     /// Create a new [UniformTV] distribution with a specified random seed.
     /// # Arguments
     /// * `min` - Function to compute the minimum bound at a given time. Must be > 0 and <= max for any t >= 0
     /// * `max` - Function to compute the maximum bound at a given time. Must be > 0 and >= min for any t >= 0
+    /// * `unit` - The [TimeUnit] that the distribution samples.
     /// * `seed` - Seed for the random number generator.
     /// # Returns
     /// A new [UniformTV].
     /// # Be careful!
     /// `min` and `max` bounds are not checked in release mode! Make sure you fulfill the bounds!
-    pub fn new_seeded(min: FMin, max: FMax, seed: u64 ) -> Self {
-        Self { min, max, rng: StdRng::seed_from_u64(seed) }
+    pub fn new_seeded(min: FMin, max: FMax, unit: TimeUnit, seed: u64 ) -> Self {
+        Self { min, max, factor: unit.factor(), rng: StdRng::seed_from_u64(seed) }
     }
 }
 
@@ -124,30 +137,31 @@ where
     /// # Panic
     /// In debug, this function will panic if at the requested time the lower bound is higher than the upper one
     /// or if any of the bounds <= 0. **This is NOT checked in release mode!**
-    fn sample(&mut self, at: Duration) -> Float {
+    fn sample(&mut self, at: Duration) -> Duration {
         let min = (self.min)(at);
         let max = (self.max)(at);
-        debug_assert!(min <= max && min > 0.0 && max > 0.0, "Invalid bound at {at:?}: [{min}, {max}]");
-        min + (max - min) * self.rng.random::<Float>()
+        debug_assert!(min <= max && min >= 0.0, "Invalid bound at {at:?}: [{min}, {max}]");
+        let raw = min + (max - min) * self.rng.random::<Float>();
+        Duration::from_secs_float(raw * self.factor)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::time::TimeUnit;
 
     #[test]
     fn samples_within_bounds() {
         let low = 1.0;
         let high = 3.0;
-        let mut dist = Uniform::new(low, high);
+        let mut dist = Uniform::new(low, high, TimeUnit::Seconds);
 
         for _ in 0..100 {
-            let value = dist.sample_at_t0();
+            let sample = dist.sample_at_t0().as_secs_float();
             assert!(
-                value >= low && value <= high,
-                "Value {} out of bounds [{}, {}]",
-                value, low, high
+                sample >= low && sample <= high,
+                "Sample {} out of bounds [{}, {}]", sample, low, high
             );
         }
     }
@@ -155,70 +169,74 @@ mod tests {
     #[test]
     fn seeded_reproducible() {
         let seed = 12345;
-        let mut dist1 = Uniform::new_seeded(0.1, 1.0, seed);
-        let mut dist2 = Uniform::new_seeded(0.1, 1.0, seed);
+        let mut dist1 = Uniform::new_seeded(0.0, 1.0, TimeUnit::Seconds, seed);
+        let mut dist2 = Uniform::new_seeded(0.0, 1.0, TimeUnit::Seconds, seed);
 
         for _ in 0..100 {
             let val1 = dist1.sample_at_t0();
             let val2 = dist2.sample_at_t0();
-            assert_eq!(
-                val1, val2,
-                "Values {} and {} should be equal with the same seed",
-                val1, val2
-            );
+            assert_eq!(val1, val2, "Values with same seed should be equal");
         }
     }
 
     #[test]
     #[should_panic]
     fn invalid_bounds_panics() {
-        let _ = Uniform::new(5.0, 2.0); // min > max should panic
+        let _ = Uniform::new(5.0, 2.0, TimeUnit::Seconds);
     }
 
     #[test]
     fn min_equals_max_returns_constant() {
         let value = 7.5;
-        let mut dist = Uniform::new(value, value);
+        let mut dist = Uniform::new(value, value, TimeUnit::Seconds);
 
         for _ in 0..10 {
-            let sample = dist.sample_at_t0();
-            assert_eq!(sample, value, "Sample should equal the fixed value");
+            let sample = dist.sample_at_t0().as_secs_float();
+            assert_eq!(sample, value, "Sample should equal fixed value");
         }
     }
 
     #[test]
-    #[ignore]
-    fn uniform_mean_approximation() {
-        let min = 1.0;
-        let max = 3.0;
-        let mut dist = Uniform::new(min, max);
+    fn time_units() {
+        let base_value = 2.0;
+        let delta = 1.0;
+        let units = [
+            TimeUnit::Days,
+            TimeUnit::Hours,
+            TimeUnit::Minutes,
+            TimeUnit::Seconds,
+            TimeUnit::Millis,
+            TimeUnit::Nanos,
+        ];
 
-        let n_samples = 100_000;
-        let mean: Float = (0..n_samples)
-            .map(|_| dist.sample_at_t0())
-            .sum::<Float>() / n_samples as Float;
-
-        let expected_mean = (min + max) / 2.0;
-        assert!((mean - expected_mean).abs() < 0.01,
-            "Sample mean {} not close to expected {}", mean, expected_mean);
+        for &unit in &units {
+            let mut dist = Uniform::new(base_value, base_value + delta, unit);
+            let sample = dist.sample_at_t0().as_secs_float();
+            let factor = unit.factor();
+            assert!(
+                sample >= base_value * factor && sample <= (base_value + delta) * factor,
+                "Uniform sample {:?} out of expected range [{}, {}] for unit {:?}",
+                sample, base_value * factor, (base_value + delta) * factor, unit
+            );
+        }
     }
 }
 
-
 #[cfg(test)]
 mod tests_tv {
-    use crate::DurationExtension;
     use super::*;
+    use crate::time::{TimeUnit, DurationExtension};
+    use std::time::Duration;
 
     #[test]
     fn samples_within_bounds() {
         let low = 1.0;
         let high = 3.0;
-        let mut dist = UniformTV::new(|_| low, |_| high);
+        let mut dist = UniformTV::new(|_| low, |_| high, TimeUnit::Seconds);
 
         for _ in 0..100 {
-            let value = dist.sample_at_t0();
-            assert!(value >= low && value <= high, "Value {} out of bounds [{}, {}]", value, low, high);
+            let sample = dist.sample_at_t0().as_secs_float();
+            assert!(sample >= low && sample <= high, "Sample {} out of bounds", sample);
         }
     }
 
@@ -228,74 +246,74 @@ mod tests_tv {
         let mut dist = UniformTV::new(
             |t| t.as_secs_float() + offset / 2.0,
             |t| t.as_secs_float() + offset,
+            TimeUnit::Seconds
         );
 
         for i in 0..5 {
             let t = Duration::from_secs(i);
-            let value = dist.sample(t);
+            let sample = dist.sample(t).as_secs_float();
             assert!(
-                value >= i as Float && value <= i as Float + offset,
-                "At time {:?}, value {} out of bounds [{}, {}]",
-                t, value, i as Float, i as Float + offset)
+                sample >= i as Float && sample <= i as Float + offset,
+                "At time {:?}, sample {} out of bounds [{}, {}]",
+                t, sample, i as Float, i as Float + offset
+            );
         }
     }
 
     #[test]
     fn seeded_reproducible() {
         let seed = 42;
-        let mut dist1 = UniformTV::new_seeded(|_| 0.1, |_| 1.0, seed);
-        let mut dist2 = UniformTV::new_seeded(|_| 0.1, |_| 1.0, seed);
+        let mut dist1 = UniformTV::new_seeded(|_| 0.0, |_| 1.0, TimeUnit::Seconds, seed);
+        let mut dist2 = UniformTV::new_seeded(|_| 0.0, |_| 1.0, TimeUnit::Seconds, seed);
 
         for _ in 0..100 {
             let val1 = dist1.sample_at_t0();
             let val2 = dist2.sample_at_t0();
-            assert_eq!(val1, val2, "Values {} and {} should be equal with the same seed", val1, val2);
+            assert_eq!(val1, val2, "Values with same seed should be equal");
         }
     }
 
     #[test]
     #[should_panic]
-    fn invalid_bounds() {
-        let mut dist = UniformTV::new(|_| 5.0, |_| 2.0);
+    fn invalid_bounds_panics() {
+        let mut dist = UniformTV::new(|_| 5.0, |_| 2.0, TimeUnit::Seconds);
         dist.sample_at_t0();
     }
 
     #[test]
     fn min_equals_max_returns_constant() {
         let value = 4.2;
-        let mut dist = UniformTV::new(|_| value, |_| value);
+        let mut dist = UniformTV::new(|_| value, |_| value, TimeUnit::Seconds);
 
         for i in 0..10 {
             let t = Duration::from_secs(i);
-            let sample = dist.sample(t);
-            assert_eq!(sample, value, "At time {:?}, sample {} should equal the fixed value {}", t, sample, value);
+            let sample = dist.sample(t).as_secs_float();
+            assert_eq!(sample, value, "At time {:?}, sample {} should equal fixed value", t, sample);
         }
     }
 
     #[test]
-    #[ignore]
-    fn uniform_tv_mean_approximation() {
-        let offset = 2.0;
-        let mut dist = UniformTV::new(
-            |t| 1.0 + t.as_secs_float() * 0.1,
-            |t| 1.0 + t.as_secs_float() * 0.1 + offset,
-        );
+    fn time_units() {
+        let base_value = 2.0;
+        let delta = 1.0;
+        let units = [
+            TimeUnit::Days,
+            TimeUnit::Hours,
+            TimeUnit::Minutes,
+            TimeUnit::Seconds,
+            TimeUnit::Millis,
+            TimeUnit::Nanos,
+        ];
 
-        let n_samples = 100_000;
-        // Test at a few time points
-        for t_sec in [0, 5, 10] {
-            let t = Duration::from_secs(t_sec);
-            let mean: Float = (0..n_samples)
-                .map(|_| dist.sample(t))
-                .sum::<Float>() / n_samples as Float;
-
-            let min = 1.0 + t_sec as Float * 0.1;
-            let max = min + offset;
-            let expected_mean = (min + max) / 2.0;
-
-            assert!((mean - expected_mean).abs() < 0.01,
-                "At t={}, sample mean {} not close to expected {}", t_sec, mean, expected_mean);
+        for &unit in &units {
+            let mut dist_tv = UniformTV::new(|_| base_value, |_| base_value + delta, unit);
+            let sample_tv = dist_tv.sample(Duration::from_secs(0)).as_secs_float();
+            let factor = unit.factor();
+            assert!(
+                sample_tv >= base_value * factor && sample_tv <= (base_value + delta) * factor,
+                "UniformTV sample {:?} out of expected range [{}, {}] for unit {:?}",
+                sample_tv, base_value * factor, (base_value + delta) * factor, unit
+            );
         }
     }
-
 }

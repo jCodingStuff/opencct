@@ -2,22 +2,20 @@
 
 use std::time::Duration;
 
-use crate::Float;
-
-
 /// Trait for probability distributions.
+/// All structs implementing this trait must know that the base unit is seconds.
 pub trait Distribution {
     /// Sample a value from the distribution at a given time.
     /// # Arguments
     /// * `at` - [Duration] since the start of the simulation.
     /// # Returns
-    /// * [Float] - Sampled value from the distribution.
-    fn sample(&mut self, at: Duration) -> Float;
+    /// * [Duration] - Sampled value from the distribution.
+    fn sample(&mut self, at: Duration) -> Duration;
 
     /// Sample a value from the distribution at time 0
     /// # Returns
-    /// [Float] - Sampled value from the distribution.
-    fn sample_at_t0(&mut self) -> Float {
+    /// [Duration] - Sampled value from the distribution.
+    fn sample_at_t0(&mut self) -> Duration {
         self.sample(Duration::ZERO)
     }
 }
