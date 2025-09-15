@@ -123,7 +123,7 @@ where
     /// A new [UniformTV].
     /// # Be careful!
     /// `min` and `max` bounds are not checked in release mode! Make sure you fulfill the bounds!
-    pub fn new_seeded(min: FMin, max: FMax, unit: TimeUnit, seed: u64 ) -> Self {
+    pub fn new_seeded(min: FMin, max: FMax, unit: TimeUnit, seed: u64) -> Self {
         Self { min, max, factor: unit.factor(), rng: StdRng::seed_from_u64(seed) }
     }
 }

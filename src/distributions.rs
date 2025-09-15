@@ -27,3 +27,7 @@ pub use uniform::UniformTV;
 pub mod exponential;
 pub use exponential::Exponential;
 pub use exponential::ExponentialTV;
+
+pub mod normal;
+pub use normal::Normal;
+pub use normal::NormalTV;
