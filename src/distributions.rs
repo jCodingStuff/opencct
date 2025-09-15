@@ -31,3 +31,7 @@ pub use exponential::ExponentialTV;
 pub mod normal;
 pub use normal::Normal;
 pub use normal::NormalTV;
+
+pub mod lognormal;
+pub use lognormal::LogNormal;
+pub use lognormal::LogNormalTV;

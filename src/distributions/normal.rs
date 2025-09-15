@@ -177,11 +177,13 @@ where
     /// In debug, this function will panic if at the requested time the standard deviation <= 0
     /// **This is NOT checked in release mode!**
     fn sample(&mut self, at: Duration) -> Duration {
+        let (mu, sigma) = ((self.mu)(at), (self.sigma)(at));
+        debug_assert!(sigma > 0.0, "Invalid sigma at {at:?}: {sigma}");
         let (x, _) = scaled_box_muller_transform(
             self.rng.random::<Float>(),
             self.rng.random::<Float>(),
-            (self.mu)(at),
-            (self.sigma)(at),
+            mu,
+            sigma,
         );
         Duration::from_secs_float(x.max(0.0) * self.factor)
     }
