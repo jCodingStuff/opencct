@@ -16,6 +16,12 @@ use super::{
 };
 
 /// Log-normal distribution.
+///
+/// Implemented via the ZIGNOR variant of the Ziggurat method. See
+/// Doornik, J. A. (2005).
+/// [An Improved Ziggurat Method to Generate Normal Random Samples](https://www.doornik.com/research/ziggurat.pdf).
+/// University of Oxford.
+///
 /// # Example
 /// ```
 /// use std::time::Duration;
@@ -80,6 +86,12 @@ impl Distribution for LogNormal {
 }
 
 /// Log-normal distribution with time-varying parmeters.
+///
+/// Implemented via the ZIGNOR variant of the Ziggurat method. See
+/// Doornik, J. A. (2005).
+/// [An Improved Ziggurat Method to Generate Normal Random Samples](https://www.doornik.com/research/ziggurat.pdf).
+/// University of Oxford.
+///
 /// # Example
 /// ```
 /// use std::time::Duration;

@@ -1,4 +1,7 @@
-//! Zignor method
+//! # Zignor method
+//! Doornik, J. A. (2005).
+//! [An Improved Ziggurat Method to Generate Normal Random Samples](https://www.doornik.com/research/ziggurat.pdf).
+//! University of Oxford.
 
 use rand::Rng;
 use once_cell::sync::Lazy;

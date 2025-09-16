@@ -17,6 +17,12 @@ use super::{
 
 /// Normal distribution. Since in the current context, negative time does not make sense, the negative values
 /// will be clamped to 0.
+///
+/// Implemented via the ZIGNOR variant of the Ziggurat method. See
+/// Doornik, J. A. (2005).
+/// [An Improved Ziggurat Method to Generate Normal Random Samples](https://www.doornik.com/research/ziggurat.pdf).
+/// University of Oxford.
+///
 /// # Example
 /// ```
 /// use std::time::Duration;
@@ -82,6 +88,12 @@ impl Distribution for Normal {
 
 /// Normal distribution with time-varying parmeters. Since in the current context,
 /// negative time does not make sense, the negative values will be clamped to 0.
+///
+/// Implemented via the ZIGNOR variant of the Ziggurat method. See
+/// Doornik, J. A. (2005).
+/// [An Improved Ziggurat Method to Generate Normal Random Samples](https://www.doornik.com/research/ziggurat.pdf).
+/// University of Oxford.
+///
 /// # Example
 /// ```
 /// use std::time::Duration;

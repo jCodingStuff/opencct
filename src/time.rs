@@ -1,4 +1,4 @@
-//! Utilitie and extensions for time
+//! Utilities and extensions for time.
 
 use std::time::Duration;
 

@@ -1,4 +1,7 @@
-//! Box-Muller Transform
+//! # Box-Muller Transform
+//! Box, G. E., & Muller, M. E. (1958).
+//! [A note on the generation of random normal deviates](https://doi.org/10.1214%2Faoms%2F1177706645).
+//! *The annals of mathematical statistics*, 29(2), 610-611.
 
 use rand::Rng;
 use std::f64::consts::{SQRT_2, PI};
