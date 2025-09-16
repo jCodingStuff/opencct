@@ -1,4 +1,4 @@
-//! # Zignor method
+//! # Zignor Method for generating standard Normal variables
 //! Doornik, J. A. (2005).
 //! [An Improved Ziggurat Method to Generate Normal Random Samples](https://www.doornik.com/research/ziggurat.pdf).
 //! University of Oxford.

@@ -1,4 +1,4 @@
-//! # Box-Muller Transform
+//! # Box-Muller Transform for generating standard Normal variables
 //! Box, G. E., & Muller, M. E. (1958).
 //! [A note on the generation of random normal deviates](https://doi.org/10.1214%2Faoms%2F1177706645).
 //! *The annals of mathematical statistics*, 29(2), 610-611.
@@ -72,7 +72,7 @@ mod box_muller_tests {
         let sigma = 20.0;
         let mut rng = StdRng::seed_from_u64(999);
 
-        let n_samples = 50_000;
+        let n_samples = 100_000;
         let mut sum = 0.0;
         let mut sum_sq = 0.0;
 

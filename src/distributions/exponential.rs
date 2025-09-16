@@ -249,12 +249,13 @@ mod tests_tv {
             let t = Duration::from_secs(t_sec);
             let lambda = 1.0 + t_sec as Float * 0.1;
             let mut sum = 0.0;
+            let n_samples = 100_000;
 
-            for _ in 0..10_000 {
+            for _ in 0..n_samples {
                 sum += dist.sample(t).as_secs_float();
             }
 
-            let mean = sum / 10_000.0;
+            let mean = sum / n_samples as Float;
             assert!((mean - 1.0 / lambda).abs() < 0.02, "At t={}, mean {} not close to expected {}", t_sec, mean, 1.0 / lambda);
         }
     }
@@ -277,4 +278,3 @@ mod tests_tv {
         }
     }
 }
-

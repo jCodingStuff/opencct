@@ -268,7 +268,7 @@ mod tests_tv {
             let t = Duration::from_secs(t_sec);
             let mu = 5.0 + t_sec as Float * 0.1;
             let mut sum = 0.0;
-            let n_samples = 10_000;
+            let n_samples = 100_000;
             for _ in 0..n_samples {
                 sum += dist.sample(t).as_nanos_float();
             }

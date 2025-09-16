@@ -287,7 +287,7 @@ mod tests_tv {
 
         let mut sum1 = 0.0;
         let mut sum2 = 0.0;
-        let n_samples = 10_000;
+        let n_samples = 100_000;
 
         for _ in 0..n_samples {
             sum1 += dist.sample(t1).as_secs_float();
