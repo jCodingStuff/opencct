@@ -41,3 +41,7 @@ pub use lognormal::LogNormalTV;
 pub mod gamma;
 pub use gamma::GammaErlang;
 pub use gamma::GammaErlangTV;
+
+pub mod triangular;
+pub use triangular::Triangular;
+pub use triangular::TriangularTV;
