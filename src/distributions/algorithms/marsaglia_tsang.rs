@@ -11,7 +11,7 @@ use super::{
     inv_sqrt,
 };
 
-/// Parameters of the Marsaglia-Tsang Method setup
+/// Marsaglia-Tsang Method struct
 pub struct MarsagliaTsang {
     alpha   : Float,
     d       : Float,
