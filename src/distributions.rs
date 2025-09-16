@@ -37,3 +37,7 @@ pub use normal::NormalTV;
 pub mod lognormal;
 pub use lognormal::LogNormal;
 pub use lognormal::LogNormalTV;
+
+pub mod gamma;
+pub use gamma::GammaErlang;
+pub use gamma::GammaErlangTV;

@@ -25,3 +25,4 @@ pub mod zignor;
 pub use zignor::{zignor_method, scaled_zignor_method};
 
 pub mod marsaglia_tsang;
+pub use marsaglia_tsang::MarsagliaTsang;
