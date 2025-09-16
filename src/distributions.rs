@@ -20,6 +20,8 @@ pub trait Distribution {
     }
 }
 
+pub mod algorithms;
+
 pub mod uniform;
 pub use uniform::Uniform;
 pub use uniform::UniformTV;

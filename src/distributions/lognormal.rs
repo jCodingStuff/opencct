@@ -3,7 +3,6 @@
 use std::time::Duration;
 use rand::{
     rngs::StdRng,
-    Rng,
     SeedableRng,
 };
 
@@ -11,8 +10,10 @@ use crate::{
     time::{DurationExtension, TimeUnit},
     Float,
 };
-use super::Distribution;
-use super::normal::scaled_box_muller_transform;
+use super::{
+    Distribution,
+    algorithms::zignor::scaled_zignor_method,
+};
 
 /// Log-normal distribution.
 /// # Example
@@ -34,9 +35,6 @@ pub struct LogNormal {
     factor  : Float,
     /// Random number generator
     rng     : StdRng,
-
-    /// Cached random variate
-    cache   : Option<Float>,
 }
 
 impl LogNormal {
@@ -51,7 +49,7 @@ impl LogNormal {
     /// This function panics if `sigma <= 0`
     pub fn new(mu: Float, sigma: Float, unit: TimeUnit) -> Self {
         assert!(sigma > 0.0, "Sigma ({sigma}) must be > 0");
-        Self { mu, sigma, factor: unit.factor(), rng: StdRng::from_os_rng(), cache: None }
+        Self { mu, sigma, factor: unit.factor(), rng: StdRng::from_os_rng() }
     }
 
     /// Create a new [LogNormal] distribution with a specified random seed.
@@ -66,28 +64,22 @@ impl LogNormal {
     /// This function panics if `sigma <= 0`
     pub fn new_seeded(mu: Float, sigma: Float, unit: TimeUnit, seed: u64) -> Self {
         assert!(sigma > 0.0, "Sigma ({sigma}) must be > 0");
-        Self { mu, sigma, factor: unit.factor(), rng: StdRng::seed_from_u64(seed), cache: None }
+        Self { mu, sigma, factor: unit.factor(), rng: StdRng::seed_from_u64(seed) }
     }
 }
 
 impl Distribution for LogNormal {
     fn sample(&mut self, _: Duration) -> Duration {
-        if let Some(variate) = self.cache.take() {
-            return Duration::from_secs_float( variate * self.factor);
-        }
-        let (x, y) = scaled_box_muller_transform(
-            self.rng.random::<Float>(),
-            self.rng.random::<Float>(),
+        let x = scaled_zignor_method(
+            &mut self.rng,
             self.mu,
             self.sigma,
         );
-        self.cache = Some(y.exp());
         Duration::from_secs_float(x.exp() * self.factor)
     }
 }
 
 /// Log-normal distribution with time-varying parmeters.
-/// Cache is not used because it is extremely unlikely to get two requests for the same time `t`.
 /// # Example
 /// ```
 /// use std::time::Duration;
@@ -154,9 +146,8 @@ where
     fn sample(&mut self, at: Duration) -> Duration {
         let (mu, sigma) = ((self.mu)(at), (self.sigma)(at));
         debug_assert!(sigma > 0.0, "Invalid sigma at {at:?}: {sigma}");
-        let (x, _) = scaled_box_muller_transform(
-            self.rng.random::<Float>(),
-            self.rng.random::<Float>(),
+        let x = scaled_zignor_method(
+            &mut self.rng,
             mu,
             sigma,
         );
