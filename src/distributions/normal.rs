@@ -169,18 +169,20 @@ where
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Float;
+    use crate::test_utils::{basic_statistics, assert_close};
+    use crate::time::TimeUnit;
 
     #[test]
     fn samples_positive() {
         let mut dist = Normal::new(5.0, 2.0, TimeUnit::Millis);
 
         for _ in 0..100 {
-            let sample = dist.sample_at_t0();
-            assert!(sample.as_secs_float() >= 0.0, "Normal sample should be >= 0, got {:?}", sample);
+            let sample = dist.sample_at_t0().as_secs_float();
+            assert!(sample >= 0.0, "Normal sample should be >= 0, got {sample}");
         }
     }
 
@@ -195,7 +197,7 @@ mod tests {
         for _ in 0..100 {
             let val1 = dist1.sample_at_t0();
             let val2 = dist2.sample_at_t0();
-            assert_eq!(val1, val2, "Values {:?} and {:?} should be equal with the same seed", val1, val2);
+            assert_eq!(val1, val2, "Values {val1:?} and {val2:?} should be equal with the same seed");
         }
     }
 
@@ -207,24 +209,30 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn mean_approximation() {
-        // Law of large numbers: mean ~ mu
+    fn mean_and_variance() {
+        const N_SAMPLES: usize = 100_000;
         let mu = 5.0;
         let sigma = 2.0;
+
         let mut dist = Normal::new(mu, sigma, TimeUnit::Millis);
-        let n_samples = 100_000;
-        let mut sum = 0.0;
-        for _ in 0..n_samples {
-            sum += dist.sample_at_t0().as_millis_float();
-        }
-        let mean = sum / n_samples as Float;
-        assert!((mean - mu).abs() < 0.05, "Sample mean {} not close to expected {}", mean, mu);
+        let samples: Vec<Float> = (0..N_SAMPLES)
+            .map(|_| dist.sample_at_t0().as_millis_float())
+            .collect();
+
+        let (mean, var) = basic_statistics(&samples);
+
+        let expected_var = sigma.powi(2);
+        assert_close(mean, mu, 0.01, "Normal mean");   // 1% tolerance
+        assert_close(var, expected_var, 0.02, "Normal variance"); // 2% tolerance
     }
 }
 
 #[cfg(test)]
 mod tests_tv {
     use super::*;
+    use crate::Float;
+    use crate::test_utils::{basic_statistics, assert_close};
+    use crate::time::TimeUnit;
     use std::time::Duration;
 
     #[test]
@@ -237,8 +245,8 @@ mod tests_tv {
 
         for i in 0..10 {
             let t = Duration::from_secs(i);
-            let sample = dist.sample(t);
-            assert!(sample.as_secs_float() >= 0.0, "NormalTV sample should be >= 0, got {:?} at t={:?}", sample, t);
+            let sample = dist.sample(t).as_secs_float();
+            assert!(sample >= 0.0, "NormalTV sample should be >= 0, got {sample} at t={t:?}");
         }
     }
 
@@ -251,29 +259,35 @@ mod tests_tv {
         for _ in 0..100 {
             let val1 = dist1.sample_at_t0();
             let val2 = dist2.sample_at_t0();
-            assert_eq!(val1, val2, "Values {:?} and {:?} should be equal with the same seed", val1, val2);
+            assert_eq!(val1, val2, "Values {val1:?} and {val2:?} should be equal with the same seed");
         }
     }
 
     #[test]
     #[ignore]
-    fn mean_time_varying() {
+    fn mean_and_variance_time_varying() {
+        const N_SAMPLES: usize = 200_000;
+
         let mut dist = NormalTV::new(
             |t| 5.0 + t.as_secs_float() * 0.1,
             |t| 2.0 + t.as_secs_float() * 0.05,
-            TimeUnit::Nanos
+            TimeUnit::Millis
         );
 
         for t_sec in [0, 5, 10] {
             let t = Duration::from_secs(t_sec);
             let mu = 5.0 + t_sec as Float * 0.1;
-            let mut sum = 0.0;
-            let n_samples = 100_000;
-            for _ in 0..n_samples {
-                sum += dist.sample(t).as_nanos_float();
-            }
-            let mean = sum / n_samples as Float;
-            assert!((mean - mu).abs() < 0.05, "At t={}, mean {} not close to expected {}", t_sec, mean, mu);
+            let sigma = 2.0 + t_sec as Float * 0.05;
+
+            let samples: Vec<Float> = (0..N_SAMPLES)
+                .map(|_| dist.sample(t).as_millis_float())
+                .collect();
+
+            let (mean, var) = basic_statistics(&samples);
+            let expected_var = sigma.powi(2);
+
+            assert_close(mean, mu, 0.01, &format!("NormalTV mean at t={t_sec}"));
+            assert_close(var, expected_var, 0.02, &format!("NormalTV variance at t={t_sec}"));
         }
     }
 }

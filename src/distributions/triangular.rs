@@ -177,18 +177,16 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::{basic_statistics, assert_close};
 
     #[test]
     fn smoke_test_sampling() {
         let mut dist = Triangular::new(1.0, 5.0, 3.0, TimeUnit::Seconds);
 
         for _ in 0..10 {
-            let v = dist.sample_at_t0();
-            assert!(v.as_secs_float().is_finite(), "Sampled value must be finite, got {v:?}");
-            assert!(
-                v.as_secs_float() >= 1.0 && v.as_secs_float() <= 5.0,
-                "Sample {v:?} out of bounds"
-            );
+            let v = dist.sample_at_t0().as_secs_float();
+            assert!(v.is_finite(), "Sampled value must be finite, got {v}");
+            assert!(v >= 1.0 && v <= 5.0, "Sample {v} out of bounds [1.0, 5.0]");
         }
     }
 
@@ -228,66 +226,40 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn mean_and_variance_match_theoretical() {
+    fn mean_and_variance() {
         const N_SAMPLES: usize = 100_000;
-        const MEAN_TOL: Float = 2.0; // percent
-        const VAR_TOL: Float = 5.0;  // percent
-
         let a = 1.0;
         let b = 5.0;
         let c = 3.0;
 
-        let theoretical_mean = (a + b + c) / 3.0;
-        let theoretical_var = (a * a + b * b + c * c - a * b - a * c - b * c) / 18.0;
-
         let mut dist = Triangular::new_seeded(a, b, c, TimeUnit::Seconds, 123);
-        let mut sum = 0.0;
-        let mut sum_sq = 0.0;
+        let samples: Vec<Float> = (0..N_SAMPLES)
+            .map(|_| dist.sample_at_t0().as_secs_float())
+            .collect();
 
-        for _ in 0..N_SAMPLES {
-            let x = dist.sample_at_t0().as_secs_float();
-            sum += x;
-            sum_sq += x * x;
-        }
+        let (mean, var) = basic_statistics(&samples);
 
-        let mean = sum / N_SAMPLES as Float;
-        let var = sum_sq / N_SAMPLES as Float - mean * mean;
+        let theoretical_mean = (a + b + c) / 3.0;
+        let theoretical_var = (a*a + b*b + c*c - a*b - a*c - b*c) / 18.0;
 
-        let mean_tol = theoretical_mean * MEAN_TOL / 100.0;
-        let var_tol = theoretical_var * VAR_TOL / 100.0;
-
-        assert!(
-            (mean - theoretical_mean).abs() <= mean_tol,
-            "Mean {mean} differs from theoretical {theoretical_mean} (tolerance ±{mean_tol})"
-        );
-
-        assert!(
-            (var - theoretical_var).abs() <= var_tol,
-            "Variance {var} differs from theoretical {theoretical_var} (tolerance ±{var_tol})"
-        );
+        assert_close(mean, theoretical_mean, 0.02, "Triangular mean"); // 2%
+        assert_close(var, theoretical_var, 0.05, "Triangular variance"); // 5%
     }
 }
 
 #[cfg(test)]
 mod tests_tv {
     use super::*;
+    use crate::test_utils::{basic_statistics, assert_close};
 
     #[test]
     fn smoke_test_sampling() {
-        let mut dist = TriangularTV::new(
-            |_| 1.0,
-            |_| 5.0,
-            |_| 3.0,
-            TimeUnit::Seconds,
-        );
+        let mut dist = TriangularTV::new(|_| 1.0, |_| 5.0, |_| 3.0, TimeUnit::Seconds);
 
         for _ in 0..10 {
-            let v = dist.sample_at_t0();
-            assert!(v.as_secs_float().is_finite(), "Sampled value must be finite, got {v:?}");
-            assert!(
-                v.as_secs_float() >= 1.0 && v.as_secs_float() <= 5.0,
-                "Sample {v:?} out of bounds"
-            );
+            let v = dist.sample_at_t0().as_secs_float();
+            assert!(v.is_finite(), "Sampled value must be finite, got {v}");
+            assert!(v >= 1.0 && v <= 5.0, "Sample {v} out of bounds [1.0, 5.0]");
         }
     }
 
@@ -303,42 +275,23 @@ mod tests_tv {
 
     #[test]
     #[ignore]
-    fn mean_and_variance_match_theoretical() {
+    fn mean_and_variance() {
         const N_SAMPLES: usize = 100_000;
-        const MEAN_TOL: Float = 2.0; // percent
-        const VAR_TOL: Float = 5.0;  // percent
-
         let a = 1.0;
         let b = 5.0;
         let c = 3.0;
 
-        let theoretical_mean = (a + b + c) / 3.0;
-        let theoretical_var = (a * a + b * b + c * c - a * b - a * c - b * c) / 18.0;
-
         let mut dist = TriangularTV::new_seeded(|_| a, |_| b, |_| c, TimeUnit::Seconds, 123);
-        let mut sum = 0.0;
-        let mut sum_sq = 0.0;
+        let samples: Vec<Float> = (0..N_SAMPLES)
+            .map(|_| dist.sample_at_t0().as_secs_float())
+            .collect();
 
-        for _ in 0..N_SAMPLES {
-            let x = dist.sample_at_t0().as_secs_float();
-            sum += x;
-            sum_sq += x * x;
-        }
+        let (mean, var) = basic_statistics(&samples);
 
-        let mean = sum / N_SAMPLES as Float;
-        let var = sum_sq / N_SAMPLES as Float - mean * mean;
+        let theoretical_mean = (a + b + c) / 3.0;
+        let theoretical_var = (a*a + b*b + c*c - a*b - a*c - b*c) / 18.0;
 
-        let mean_tol = theoretical_mean * MEAN_TOL / 100.0;
-        let var_tol = theoretical_var * VAR_TOL / 100.0;
-
-        assert!(
-            (mean - theoretical_mean).abs() <= mean_tol,
-            "Mean {mean} differs from theoretical {theoretical_mean} (tolerance ±{mean_tol})"
-        );
-
-        assert!(
-            (var - theoretical_var).abs() <= var_tol,
-            "Variance {var} differs from theoretical {theoretical_var} (tolerance ±{var_tol})"
-        );
+        assert_close(mean, theoretical_mean, 0.02, "TriangularTV mean"); // 2%
+        assert_close(var, theoretical_var, 0.05, "TriangularTV variance"); // 5%
     }
 }

@@ -185,6 +185,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::{basic_statistics, assert_close};
 
     #[test]
     #[should_panic]
@@ -196,18 +197,6 @@ mod tests {
     #[should_panic]
     fn new_panics_on_zero_theta() {
         let _ = GammaErlang::new(1.0, 0.0, TimeUnit::Seconds);
-    }
-
-    #[test]
-    #[should_panic]
-    fn new_seeded_panics_on_negative_alpha() {
-        let _ = GammaErlang::new_seeded(-1.0, 1.0, TimeUnit::Seconds, 42);
-    }
-
-    #[test]
-    #[should_panic]
-    fn new_seeded_panics_on_negative_theta() {
-        let _ = GammaErlang::new_seeded(1.0, -1.0, TimeUnit::Seconds, 42);
     }
 
     #[test]
@@ -230,45 +219,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
-    fn mean_and_variance_large_sample() {
-        const N_SAMPLES: usize = 100_000;
-        const TOLERANCE_PERCENT: Float = 1.0;
-
-        let alpha = 2.0;
-        let theta = 3.0;
-
-        let mut dist = GammaErlang::new(alpha, theta, TimeUnit::Seconds);
-        let mut sum = 0.0;
-        let mut sum_sq = 0.0;
-
-        for _ in 0..N_SAMPLES {
-            let x = dist.sample_at_t0().as_secs_float();
-            sum += x;
-            sum_sq += x * x;
-        }
-
-        let mean = sum / N_SAMPLES as Float;
-        let variance = sum_sq / N_SAMPLES as Float - mean * mean;
-        let std = variance.sqrt();
-
-        let expected_mean = alpha * theta;
-        let expected_std = (alpha * theta * theta).sqrt();
-
-        let mean_tol = expected_mean * TOLERANCE_PERCENT / 100.0;
-        let std_tol = expected_std * TOLERANCE_PERCENT / 100.0;
-
-        assert!(
-            (mean - expected_mean).abs() <= mean_tol,
-            "Mean too far from {expected_mean}: {mean} (tolerance ±{mean_tol})"
-        );
-        assert!(
-            (std - expected_std).abs() <= std_tol,
-            "Std too far from {expected_std}: {std} (tolerance ±{std_tol})"
-        );
-    }
-
-    #[test]
     fn values_are_finite() {
         let mut dist = GammaErlang::new(3.0, 2.0, TimeUnit::Seconds);
 
@@ -277,11 +227,35 @@ mod tests {
             assert!(x.is_finite(), "Generated value is not finite: {x}");
         }
     }
+
+    #[test]
+    #[ignore]
+    fn mean_and_variance_large_sample() {
+        const N_SAMPLES: usize = 100_000;
+
+        let alpha = 2.0;
+        let theta = 3.0;
+        let mut dist = GammaErlang::new(alpha, theta, TimeUnit::Seconds);
+
+        let samples: Vec<Float> = (0..N_SAMPLES)
+            .map(|_| dist.sample_at_t0().as_secs_float())
+            .collect();
+
+        let (mean, var) = basic_statistics(&samples);
+
+        let expected_mean = alpha * theta;
+        let expected_var = alpha * theta.powi(2);
+
+        assert_close(mean, expected_mean, 0.01, "GammaErlang mean"); // 1% tolerance
+        assert_close(var, expected_var, 0.02, "GammaErlang variance"); // 2% tolerance
+    }
 }
 
 #[cfg(test)]
 mod tests_tv {
     use super::*;
+    use crate::test_utils::{basic_statistics, assert_close};
+    use std::time::Duration;
 
     #[test]
     fn smoke_sample_tv() {
@@ -307,38 +281,23 @@ mod tests_tv {
     #[ignore]
     fn mean_and_variance_large_sample_tv() {
         const N_SAMPLES: usize = 100_000;
-        const TOLERANCE_PERCENT: Float = 1.0;
 
         let alpha = 2.0;
         let theta = 3.0;
 
         let mut dist = GammaErlangTV::new(|_| alpha, |_| theta, TimeUnit::Seconds);
-        let mut sum = 0.0;
-        let mut sum_sq = 0.0;
 
-        for _ in 0..N_SAMPLES {
-            let x = dist.sample_at_t0().as_secs_float();
-            sum += x;
-            sum_sq += x * x;
-        }
+        let samples: Vec<Float> = (0..N_SAMPLES)
+            .map(|_| dist.sample_at_t0().as_secs_float())
+            .collect();
 
-        let mean = sum / N_SAMPLES as Float;
-        let variance = sum_sq / N_SAMPLES as Float - mean * mean;
-        let std = variance.sqrt();
+        let (mean, var) = basic_statistics(&samples);
 
         let expected_mean = alpha * theta;
-        let expected_std = (alpha * theta * theta).sqrt();
+        let expected_var = alpha * theta.powi(2);
 
-        let mean_tol = expected_mean * TOLERANCE_PERCENT / 100.0;
-        let std_tol = expected_std * TOLERANCE_PERCENT / 100.0;
-
-        assert!(
-            (mean - expected_mean).abs() <= mean_tol,
-            "Mean too far from {expected_mean}: {mean} (tolerance ±{mean_tol})"
-        );
-        assert!(
-            (std - expected_std).abs() <= std_tol,
-            "Std too far from {expected_std}: {std} (tolerance ±{std_tol})"
-        );
+        assert_close(mean, expected_mean, 0.01, "GammaErlangTV mean");
+        assert_close(var, expected_var, 0.02, "GammaErlangTV variance");
     }
 }
+

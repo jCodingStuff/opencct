@@ -170,7 +170,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::time::DurationExtension;
+    use crate::test_utils::{basic_statistics, assert_close};
 
     #[test]
     fn samples_positive() {
@@ -211,41 +211,35 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn mean_matches_theory() {
+    fn mean_and_variance() {
         let mu: Float = 1.0;
-        let sigma :Float = 0.5;
-        let expected_mean = (mu + 0.5 * sigma * sigma).exp();
+        let sigma: Float = 0.5;
+        const N_SAMPLES: usize = 100_000;
 
         let mut dist = LogNormal::new(mu, sigma, TimeUnit::Seconds);
-        let n_samples = 100_000;
-        let mut sum = 0.0;
 
-        for _ in 0..n_samples {
-            sum += dist.sample_at_t0().as_secs_float();
-        }
+        let samples: Vec<Float> = (0..N_SAMPLES)
+            .map(|_| dist.sample_at_t0().as_secs_float())
+            .collect();
 
-        let empirical_mean = sum / n_samples as Float;
+        let (mean, var) = basic_statistics(&samples);
 
-        assert!(
-            (empirical_mean - expected_mean).abs() / expected_mean < 0.05,
-            "Empirical mean {} not close to theoretical {}",
-            empirical_mean,
-            expected_mean
-        );
+        let expected_mean = (mu + 0.5 * sigma.powi(2)).exp();
+        let expected_var = ((sigma.powi(2)).exp() - 1.0) * (2.0 * mu + sigma.powi(2)).exp();
+
+        assert_close(mean, expected_mean, 0.05, "LogNormal mean"); // 5% tolerance
+        assert_close(var, expected_var, 0.10, "LogNormal variance"); // 10% tolerance
     }
 }
 
 #[cfg(test)]
 mod tests_tv {
     use super::*;
+    use crate::test_utils::{basic_statistics, assert_close};
 
     #[test]
     fn samples_positive() {
-        let mut dist = LogNormalTV::new(
-            |_| 0.0,
-            |_| 1.0,
-            TimeUnit::Seconds,
-        );
+        let mut dist = LogNormalTV::new(|_| 0.0, |_| 1.0, TimeUnit::Seconds);
 
         for i in 0..10 {
             let t = Duration::from_secs(i);
@@ -275,62 +269,28 @@ mod tests_tv {
 
     #[test]
     #[ignore]
-    fn mean_increases_with_mu() {
-        let mut dist = LogNormalTV::new(
-            |t| t.as_secs_float() * 0.1,
-            |_| 0.5,
-            TimeUnit::Seconds,
-        );
-
-        let t1 = Duration::from_secs(1);
-        let t2 = Duration::from_secs(5);
-
-        let mut sum1 = 0.0;
-        let mut sum2 = 0.0;
-        let n_samples = 100_000;
-
-        for _ in 0..n_samples {
-            sum1 += dist.sample(t1).as_secs_float();
-            sum2 += dist.sample(t2).as_secs_float();
-        }
-
-        let mean1 = sum1 / n_samples as Float;
-        let mean2 = sum2 / n_samples as Float;
-
-        assert!(
-            mean2 > mean1,
-            "Expected mean at t2={} ({}) to be greater than mean at t1={} ({})",
-            t2.as_secs(),
-            mean2,
-            t1.as_secs(),
-            mean1,
-        );
-    }
-
-    #[test]
-    #[ignore]
-    fn mean_matches_theory_time_varying() {
+    fn mean_and_variance_time_varying() {
         let mu_fn = |t: Duration| 0.5 * t.as_secs_float();
         let sigma_fn = |_| 0.25;
+        const N_SAMPLES: usize = 100_000;
+
         let mut dist = LogNormalTV::new(mu_fn, sigma_fn, TimeUnit::Seconds);
 
-        let t = Duration::from_secs(4);
-        let mu = mu_fn(t);
-        let sigma = sigma_fn(t);
-        let expected_mean = (mu + 0.5 * sigma * sigma).exp();
+        for &t_sec in &[0, 4, 8] {
+            let t = Duration::from_secs(t_sec);
+            let mu = mu_fn(t);
+            let sigma = sigma_fn(t);
 
-        let n_samples = 100_000;
-        let mut sum = 0.0;
+            let samples: Vec<Float> = (0..N_SAMPLES)
+                .map(|_| dist.sample(t).as_secs_float())
+                .collect();
 
-        for _ in 0..n_samples {
-            sum += dist.sample(t).as_secs_float();
+            let (mean, var) = basic_statistics(&samples);
+            let expected_mean = (mu + 0.5 * sigma.powi(2)).exp();
+            let expected_var = ((sigma.powi(2)).exp() - 1.0) * (2.0 * mu + sigma.powi(2)).exp();
+
+            assert_close(mean, expected_mean, 0.05, &format!("LogNormalTV mean at t={t_sec}"));
+            assert_close(var, expected_var, 0.10, &format!("LogNormalTV variance at t={t_sec}"));
         }
-
-        let empirical_mean = sum / n_samples as Float;
-
-        assert!(
-            (empirical_mean - expected_mean).abs() / expected_mean < 0.05,
-            "At t={t:?}, empirical mean {empirical_mean} not close to theoretical {expected_mean}",
-        );
     }
 }

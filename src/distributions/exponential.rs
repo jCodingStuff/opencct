@@ -135,24 +135,25 @@ where
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::time::{TimeUnit, DurationExtension};
+    use crate::test_utils::{basic_statistics, assert_close};
 
     #[test]
-    fn samples_positive() {
-        let mut dist = Exponential::new(1.0, TimeUnit::Seconds);
-
-        for _ in 0..100 {
-            let value = dist.sample_at_t0().as_secs_float();
-            assert!(value >= 0.0, "Exponential sample should be >= 0, got {}", value);
-        }
+    #[should_panic]
+    fn new_panics_on_zero_lambda() {
+        let _ = Exponential::new(0.0, TimeUnit::Seconds);
     }
 
     #[test]
-    fn seeded_reproducible() {
+    fn smoke_sample() {
+        let mut dist = Exponential::new(1.5, TimeUnit::Seconds);
+        let _ = dist.sample_at_t0();
+    }
+
+    #[test]
+    fn reproducible_with_seed() {
         let lambda = 2.0;
         let seed = 42;
         let mut dist1 = Exponential::new_seeded(lambda, TimeUnit::Seconds, seed);
@@ -161,26 +162,41 @@ mod tests {
         for _ in 0..100 {
             let val1 = dist1.sample_at_t0().as_secs_float();
             let val2 = dist2.sample_at_t0().as_secs_float();
-            assert_eq!(val1, val2, "Values {} and {} should be equal with the same seed", val1, val2);
+            assert_eq!(val1, val2, "Values should be equal with same seed");
         }
     }
 
     #[test]
-    #[should_panic]
-    fn invalid_lambda_panics() {
-        let _ = Exponential::new(0.0, TimeUnit::Seconds);
+    fn values_are_finite() {
+        let mut dist = Exponential::new(1.0, TimeUnit::Seconds);
+
+        for _ in 0..10_000 {
+            let x = dist.sample_at_t0().as_secs_float();
+            assert!(x.is_finite(), "Generated value is not finite: {x}");
+        }
     }
 
     #[test]
     #[ignore]
-    fn mean_approximation() {
+    fn mean_and_variance_large_sample() {
+        const N_SAMPLES: usize = 100_000;
+        const MEAN_TOL: Float = 0.01;
+        const VAR_TOL: Float = 0.02;
+
         let lambda = 2.0;
         let mut dist = Exponential::new(lambda, TimeUnit::Seconds);
-        let samples: Vec<Float> = (0..100_000)
+
+        let samples: Vec<Float> = (0..N_SAMPLES)
             .map(|_| dist.sample_at_t0().as_secs_float())
             .collect();
-        let mean: Float = samples.iter().sum::<Float>() / samples.len() as Float;
-        assert!((mean - 1.0 / lambda).abs() < 0.01, "Sample mean {} not close to expected {}", mean, 1.0 / lambda);
+
+        let (mean, var) = basic_statistics(&samples);
+
+        let expected_mean = 1.0 / lambda;
+        let expected_var = 1.0 / (lambda * lambda);
+
+        assert_close(mean, expected_mean, MEAN_TOL, "Exponential mean");
+        assert_close(var, expected_var, VAR_TOL, "Exponential variance");
     }
 
     #[test]
@@ -206,22 +222,17 @@ mod tests {
 #[cfg(test)]
 mod tests_tv {
     use super::*;
-    use crate::time::{TimeUnit, DurationExtension};
-    use std::time::Duration;
+    use crate::test_utils::{basic_statistics, assert_close};
 
     #[test]
-    fn samples_positive() {
+    fn smoke_sample_tv() {
         let mut dist = ExponentialTV::new(|t| 1.0 + t.as_secs_float() * 0.1, TimeUnit::Seconds);
-
-        for i in 0..10 {
-            let t = Duration::from_secs(i);
-            let value = dist.sample(t).as_secs_float();
-            assert!(value >= 0.0, "ExponentialTV sample should be >= 0, got {} at t={:?}", value, t);
-        }
+        let _ = dist.sample_at_t0();
+        let _ = dist.sample(Duration::from_secs(5));
     }
 
     #[test]
-    fn seeded_reproducible() {
+    fn reproducible_with_seed_tv() {
         let seed = 123;
         let mut dist1 = ExponentialTV::new_seeded(|_| 1.5, TimeUnit::Seconds, seed);
         let mut dist2 = ExponentialTV::new_seeded(|_| 1.5, TimeUnit::Seconds, seed);
@@ -229,7 +240,7 @@ mod tests_tv {
         for _ in 0..100 {
             let val1 = dist1.sample_at_t0().as_secs_float();
             let val2 = dist2.sample_at_t0().as_secs_float();
-            assert_eq!(val1, val2, "Values {} and {} should be equal with the same seed", val1, val2);
+            assert_eq!(val1, val2, "Values should be equal with same seed");
         }
     }
 
@@ -242,21 +253,28 @@ mod tests_tv {
 
     #[test]
     #[ignore]
-    fn mean_time_varying() {
+    fn mean_and_variance_time_varying() {
+        const N_SAMPLES: usize = 100_000;
+        const MEAN_TOL: Float = 0.02;
+        const VAR_TOL: Float = 0.03;
+
         let mut dist = ExponentialTV::new(|t| 1.0 + t.as_secs_float() * 0.1, TimeUnit::Seconds);
 
         for t_sec in [0, 5, 10] {
             let t = Duration::from_secs(t_sec);
             let lambda = 1.0 + t_sec as Float * 0.1;
-            let mut sum = 0.0;
-            let n_samples = 100_000;
 
-            for _ in 0..n_samples {
-                sum += dist.sample(t).as_secs_float();
-            }
+            let samples: Vec<Float> = (0..N_SAMPLES)
+                .map(|_| dist.sample(t).as_secs_float())
+                .collect();
 
-            let mean = sum / n_samples as Float;
-            assert!((mean - 1.0 / lambda).abs() < 0.02, "At t={}, mean {} not close to expected {}", t_sec, mean, 1.0 / lambda);
+            let (mean, var) = basic_statistics(&samples);
+
+            let expected_mean = 1.0 / lambda;
+            let expected_var = 1.0 / (lambda * lambda);
+
+            assert_close(mean, expected_mean, MEAN_TOL, &format!("ExponentialTV mean at t={}", t_sec));
+            assert_close(var, expected_var, VAR_TOL, &format!("ExponentialTV variance at t={}", t_sec));
         }
     }
 

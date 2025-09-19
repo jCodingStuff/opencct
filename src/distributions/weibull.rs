@@ -144,3 +144,86 @@ where
         Duration::from_secs_float(raw * self.factor)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::math::gamma;
+    use crate::test_utils::{assert_close, basic_statistics};
+
+    #[test]
+    fn smoke_test() {
+        let mut dist = Weibull::new_seeded(2.0, 1.5, TimeUnit::Seconds, 42);
+        let sample = dist.sample_at_t0();
+        assert!(sample.as_secs_float() >= 0.0);
+    }
+
+    #[test]
+    #[ignore]
+    fn mean_and_variance() {
+        const N_SAMPLES: usize = 100_000;
+        let lambda: Float = 2.0;
+        let k: Float = 1.5;
+        let mut dist = Weibull::new_seeded(lambda, k, TimeUnit::Seconds, 123);
+
+        let samples: Vec<Float> = (0..N_SAMPLES)
+            .map(|_| dist.sample_at_t0().as_secs_float())
+            .collect();
+
+        let (mean, var) = basic_statistics(&samples);
+
+        let expected_mean = lambda * gamma(1.0 + 1.0 / k);
+        let expected_var = lambda.powi(2) * (gamma(1.0 + 2.0 / k) - gamma(1.0 + 1.0 / k).powi(2));
+
+        assert_close(mean, expected_mean, 0.05, "mean"); // 5% tolerance
+        assert_close(var, expected_var, 0.10, "variance"); // 10% tolerance
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_params_zero() {
+        Weibull::new(0.0, 1.0, TimeUnit::Seconds);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_params_negative() {
+        Weibull::new(1.0, -1.0, TimeUnit::Seconds);
+    }
+}
+
+#[cfg(test)]
+mod tests_tv {
+    use super::*;
+    use crate::math::gamma;
+    use crate::test_utils::{assert_close, basic_statistics};
+
+    #[test]
+    fn smoke_test() {
+        let mut dist = WeibullTV::new(|_| 2.0, |_| 1.5, TimeUnit::Seconds);
+        let sample = dist.sample_at_t0();
+        assert!(sample.as_secs_float() >= 0.0);
+    }
+
+    #[test]
+    #[ignore]
+    fn mean_and_variance_at_fixed_time() {
+        const N_SAMPLES: usize = 100_000;
+        let lambda: Float = 2.0;
+        let k: Float = 1.5;
+        let mut dist = WeibullTV::new(|_| lambda, |_| k, TimeUnit::Seconds);
+
+        let t = Duration::from_secs(5);
+        let samples: Vec<Float> = (0..N_SAMPLES)
+            .map(|_| dist.sample(t).as_secs_float())
+            .collect();
+
+        let (mean, var) = basic_statistics(&samples);
+
+        let expected_mean = lambda * gamma(1.0 + 1.0 / k);
+        let expected_var = lambda.powi(2) * (gamma(1.0 + 2.0 / k) - gamma(1.0 + 1.0 / k).powi(2));
+
+        assert_close(mean, expected_mean, 0.05, "mean"); // 5% tolerance
+        assert_close(var, expected_var, 0.10, "variance"); // 10% tolerance
+    }
+}

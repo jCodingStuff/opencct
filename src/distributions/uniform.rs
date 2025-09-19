@@ -149,7 +149,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::time::TimeUnit;
+    use crate::test_utils::{basic_statistics, assert_close};
 
     #[test]
     fn samples_within_bounds() {
@@ -159,10 +159,7 @@ mod tests {
 
         for _ in 0..100 {
             let sample = dist.sample_at_t0().as_secs_float();
-            assert!(
-                sample >= low && sample <= high,
-                "Sample {} out of bounds [{}, {}]", sample, low, high
-            );
+            assert!(sample >= low && sample <= high, "Sample {sample} out of bounds [{low}, {high}]");
         }
     }
 
@@ -173,9 +170,7 @@ mod tests {
         let mut dist2 = Uniform::new_seeded(0.0, 1.0, TimeUnit::Seconds, seed);
 
         for _ in 0..100 {
-            let val1 = dist1.sample_at_t0();
-            let val2 = dist2.sample_at_t0();
-            assert_eq!(val1, val2, "Values with same seed should be equal");
+            assert_eq!(dist1.sample_at_t0(), dist2.sample_at_t0(), "Values with same seed should match");
         }
     }
 
@@ -192,7 +187,7 @@ mod tests {
 
         for _ in 0..10 {
             let sample = dist.sample_at_t0().as_secs_float();
-            assert_eq!(sample, value, "Sample should equal fixed value");
+            assert_close(sample, value, 0.0, "Uniform constant sample");
         }
     }
 
@@ -220,13 +215,33 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    #[ignore]
+    fn mean_and_variance() {
+        const N_SAMPLES: usize = 100_000;
+        let low = 1.0;
+        let high = 5.0;
+        let mut dist = Uniform::new_seeded(low, high, TimeUnit::Seconds, 42);
+
+        let samples: Vec<Float> = (0..N_SAMPLES)
+            .map(|_| dist.sample_at_t0().as_secs_float())
+            .collect();
+
+        let (mean, var) = basic_statistics(&samples);
+
+        let expected_mean = (low + high) / 2.0;
+        let expected_var = ((high - low).powi(2)) / 12.0;
+
+        assert_close(mean, expected_mean, 0.01, "Uniform mean"); // 1% tolerance
+        assert_close(var, expected_var, 0.02, "Uniform variance"); // 2% tolerance
+    }
 }
 
 #[cfg(test)]
 mod tests_tv {
     use super::*;
-    use crate::time::{TimeUnit, DurationExtension};
-    use std::time::Duration;
+    use crate::test_utils::{basic_statistics, assert_close};
 
     #[test]
     fn samples_within_bounds() {
@@ -236,7 +251,7 @@ mod tests_tv {
 
         for _ in 0..100 {
             let sample = dist.sample_at_t0().as_secs_float();
-            assert!(sample >= low && sample <= high, "Sample {} out of bounds", sample);
+            assert!(sample >= low && sample <= high, "Sample {sample} out of bounds");
         }
     }
 
@@ -267,9 +282,7 @@ mod tests_tv {
         let mut dist2 = UniformTV::new_seeded(|_| 0.0, |_| 1.0, TimeUnit::Seconds, seed);
 
         for _ in 0..100 {
-            let val1 = dist1.sample_at_t0();
-            let val2 = dist2.sample_at_t0();
-            assert_eq!(val1, val2, "Values with same seed should be equal");
+            assert_eq!(dist1.sample_at_t0(), dist2.sample_at_t0(), "Values with same seed should match");
         }
     }
 
@@ -288,7 +301,7 @@ mod tests_tv {
         for i in 0..10 {
             let t = Duration::from_secs(i);
             let sample = dist.sample(t).as_secs_float();
-            assert_eq!(sample, value, "At time {:?}, sample {} should equal fixed value", t, sample);
+            assert_close(sample, value, 0.0, "UniformTV constant sample");
         }
     }
 
@@ -315,5 +328,27 @@ mod tests_tv {
                 sample_tv, base_value * factor, (base_value + delta) * factor, unit
             );
         }
+    }
+
+    #[test]
+    #[ignore]
+    fn mean_and_variance() {
+        const N_SAMPLES: usize = 100_000;
+        let low = 1.0;
+        let high = 5.0;
+        let mut dist = UniformTV::new_seeded(|_| low, |_| high, TimeUnit::Seconds, 42);
+
+        let t = Duration::from_secs(5);
+        let samples: Vec<Float> = (0..N_SAMPLES)
+            .map(|_| dist.sample(t).as_secs_float())
+            .collect();
+
+        let (mean, var) = basic_statistics(&samples);
+
+        let expected_mean = (low + high) / 2.0;
+        let expected_var = ((high - low).powi(2)) / 12.0;
+
+        assert_close(mean, expected_mean, 0.01, "UniformTV mean"); // 1% tolerance
+        assert_close(var, expected_var, 0.02, "UniformTV variance"); // 2% tolerance
     }
 }

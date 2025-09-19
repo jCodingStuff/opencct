@@ -14,6 +14,10 @@ pub type Float = f32;
 #[cfg(feature = "f64")]
 pub type Float = f64;
 
+pub mod test_utils;
+
 pub mod distributions;
 
 pub mod time;
+
+pub mod math;
