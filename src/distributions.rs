@@ -42,6 +42,10 @@ pub mod gamma;
 pub use gamma::GammaErlang;
 pub use gamma::GammaErlangTV;
 
+pub mod weibull;
+pub use weibull::Weibull;
+pub use weibull::WeibullTV;
+
 pub mod triangular;
 pub use triangular::Triangular;
 pub use triangular::TriangularTV;
