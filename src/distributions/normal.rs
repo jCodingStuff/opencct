@@ -173,7 +173,7 @@ where
 mod tests {
     use super::*;
     use crate::Float;
-    use crate::test_utils::{basic_statistics, assert_close};
+    use crate::test_utils::{BasicStatistics, assert_close};
     use crate::time::TimeUnit;
 
     #[test]
@@ -219,7 +219,8 @@ mod tests {
             .map(|_| dist.sample_at_t0().as_millis_float())
             .collect();
 
-        let (mean, var) = basic_statistics(&samples);
+        let stats = BasicStatistics::compute(&samples);
+        let (mean, var) = (stats.mean(), stats.variance());
 
         let expected_var = sigma.powi(2);
         assert_close(mean, mu, 0.01, "Normal mean");   // 1% tolerance
@@ -231,7 +232,7 @@ mod tests {
 mod tests_tv {
     use super::*;
     use crate::Float;
-    use crate::test_utils::{basic_statistics, assert_close};
+    use crate::test_utils::{BasicStatistics, assert_close};
     use crate::time::TimeUnit;
     use std::time::Duration;
 
@@ -283,7 +284,8 @@ mod tests_tv {
                 .map(|_| dist.sample(t).as_millis_float())
                 .collect();
 
-            let (mean, var) = basic_statistics(&samples);
+            let stats = BasicStatistics::compute(&samples);
+            let (mean, var) = (stats.mean(), stats.variance());
             let expected_var = sigma.powi(2);
 
             assert_close(mean, mu, 0.01, &format!("NormalTV mean at t={t_sec}"));

@@ -138,7 +138,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{basic_statistics, assert_close};
+    use crate::test_utils::{BasicStatistics, assert_close};
 
     #[test]
     #[should_panic]
@@ -190,7 +190,8 @@ mod tests {
             .map(|_| dist.sample_at_t0().as_secs_float())
             .collect();
 
-        let (mean, var) = basic_statistics(&samples);
+        let stats = BasicStatistics::compute(&samples);
+        let (mean, var) = (stats.mean(), stats.variance());
 
         let expected_mean = 1.0 / lambda;
         let expected_var = 1.0 / (lambda * lambda);
@@ -222,7 +223,7 @@ mod tests {
 #[cfg(test)]
 mod tests_tv {
     use super::*;
-    use crate::test_utils::{basic_statistics, assert_close};
+    use crate::test_utils::{BasicStatistics, assert_close};
 
     #[test]
     fn smoke_sample_tv() {
@@ -268,7 +269,8 @@ mod tests_tv {
                 .map(|_| dist.sample(t).as_secs_float())
                 .collect();
 
-            let (mean, var) = basic_statistics(&samples);
+            let stats = BasicStatistics::compute(&samples);
+            let (mean, var) = (stats.mean(), stats.variance());
 
             let expected_mean = 1.0 / lambda;
             let expected_var = 1.0 / (lambda * lambda);

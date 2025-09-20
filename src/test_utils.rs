@@ -9,29 +9,57 @@
 
 use crate::Float;
 
-/// Compute the **sample mean** and **sample variance** of a slice of values.
+/// A simple container for basic population statistics computed from a slice of samples.
 ///
-/// # Arguments
-/// * `samples` – A slice of sampled values.
+/// Currently this struct stores the **mean**, **variance**, and provides a method
+/// to compute the **standard deviation** of the provided sample data.
+/// It is designed to be easily extended in the future (e.g., adding median,
+/// skewness, or higher-order moments) without breaking existing code.
 ///
-/// # Returns
-/// A tuple `(mean, variance)` computed as:
-/// - `mean = Σx / n`
-/// - `variance = Σ(x - mean)² / n`
+/// # Notes
+/// - Both the mean and variance are computed as *population* statistics:
+///   - Mean: `Σx / N`
+///   - Variance: `Σ(x - mean)² / N`
+/// - For *sample* variance and standard deviation (with `N - 1` in the denominator),
+///   you would need to implement a different method.
 ///
-/// # Example
+/// # Examples
 /// ```
-/// use opencct::test_utils::basic_statistics;
+/// use opencct::test_utils::BasicStatistics;
 ///
-/// let samples = vec![1.0, 2.0, 3.0];
-/// let (mean, var) = basic_statistics(&samples);
-/// assert_eq!(mean, 2.0);
-/// assert_eq!(var, 2.0/3.0);
+/// let samples = vec![1.0, 2.0, 3.0, 4.0];
+/// let stats = BasicStatistics::compute(&samples);
+///
+/// assert_eq!(stats.mean(), 2.5);
+/// assert_eq!(stats.variance(), 1.25);
+/// assert!((stats.std() - 1.1180).abs() < 1e-4);
 /// ```
-pub fn basic_statistics(samples: &[Float]) -> (Float, Float) {
-    let mean = samples.iter().sum::<Float>() / samples.len() as Float;
-    let var = samples.iter().map(|x| (x - mean).powi(2)).sum::<Float>() / samples.len() as Float;
-    (mean, var)
+pub struct BasicStatistics {
+    mean        : Float,
+    variance    : Float,
+}
+
+impl BasicStatistics {
+    /// Compute mean and variance for the given slice of samples.
+    ///
+    /// # Panics
+    /// This method panics if `samples` is empty.
+    pub fn compute(samples: &[Float]) -> Self {
+        let mean = samples.iter().sum::<Float>() / samples.len() as Float;
+        let variance = samples.iter().map(|x| (x - mean).powi(2)).sum::<Float>() / samples.len() as Float;
+        Self { mean, variance }
+    }
+
+    /// Return the mean of the samples.
+    pub fn mean(&self) -> Float { self.mean }
+
+    /// Return the variance of the samples.
+    pub fn variance(&self) -> Float { self.variance }
+
+    /// Return the standard deviation of the samples.
+    ///
+    /// Computed as the square root of the population variance.
+    pub fn std(&self) -> Float { self.variance.sqrt() }
 }
 
 /// Assert that two floating-point values are approximately equal within
@@ -68,7 +96,8 @@ mod tests {
     #[test]
     fn test_basic_statistics_mean_and_variance() {
         let samples = [1.0, 2.0, 3.0, 4.0];
-        let (mean, var) = basic_statistics(&samples);
+        let stats = BasicStatistics::compute(&samples);
+        let (mean, var) = (stats.mean, stats.variance);
 
         // The mean should be 2.5
         assert!((mean - 2.5).abs() < 1e-12, "mean mismatch, got {mean}");

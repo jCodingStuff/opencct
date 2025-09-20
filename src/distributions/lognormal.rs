@@ -170,7 +170,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{basic_statistics, assert_close};
+    use crate::test_utils::{BasicStatistics, assert_close};
 
     #[test]
     fn samples_positive() {
@@ -222,7 +222,8 @@ mod tests {
             .map(|_| dist.sample_at_t0().as_secs_float())
             .collect();
 
-        let (mean, var) = basic_statistics(&samples);
+        let stats = BasicStatistics::compute(&samples);
+        let (mean, var) = (stats.mean(), stats.variance());
 
         let expected_mean = (mu + 0.5 * sigma.powi(2)).exp();
         let expected_var = ((sigma.powi(2)).exp() - 1.0) * (2.0 * mu + sigma.powi(2)).exp();
@@ -235,7 +236,7 @@ mod tests {
 #[cfg(test)]
 mod tests_tv {
     use super::*;
-    use crate::test_utils::{basic_statistics, assert_close};
+    use crate::test_utils::{BasicStatistics, assert_close};
 
     #[test]
     fn samples_positive() {
@@ -285,7 +286,8 @@ mod tests_tv {
                 .map(|_| dist.sample(t).as_secs_float())
                 .collect();
 
-            let (mean, var) = basic_statistics(&samples);
+            let stats = BasicStatistics::compute(&samples);
+            let (mean, var) = (stats.mean(), stats.variance());
             let expected_mean = (mu + 0.5 * sigma.powi(2)).exp();
             let expected_var = ((sigma.powi(2)).exp() - 1.0) * (2.0 * mu + sigma.powi(2)).exp();
 

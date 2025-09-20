@@ -185,7 +185,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::{basic_statistics, assert_close};
+    use crate::test_utils::{BasicStatistics, assert_close};
 
     #[test]
     #[should_panic]
@@ -241,7 +241,8 @@ mod tests {
             .map(|_| dist.sample_at_t0().as_secs_float())
             .collect();
 
-        let (mean, var) = basic_statistics(&samples);
+        let stats = BasicStatistics::compute(&samples);
+        let (mean, var) = (stats.mean(), stats.variance());
 
         let expected_mean = alpha * theta;
         let expected_var = alpha * theta.powi(2);
@@ -254,7 +255,7 @@ mod tests {
 #[cfg(test)]
 mod tests_tv {
     use super::*;
-    use crate::test_utils::{basic_statistics, assert_close};
+    use crate::test_utils::{BasicStatistics, assert_close};
     use std::time::Duration;
 
     #[test]
@@ -291,7 +292,8 @@ mod tests_tv {
             .map(|_| dist.sample_at_t0().as_secs_float())
             .collect();
 
-        let (mean, var) = basic_statistics(&samples);
+        let stats = BasicStatistics::compute(&samples);
+        let (mean, var) = (stats.mean(), stats.variance());
 
         let expected_mean = alpha * theta;
         let expected_var = alpha * theta.powi(2);
@@ -300,4 +302,3 @@ mod tests_tv {
         assert_close(var, expected_var, 0.02, "GammaErlangTV variance");
     }
 }
-

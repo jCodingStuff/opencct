@@ -149,7 +149,7 @@ where
 mod tests {
     use super::*;
     use crate::math::gamma;
-    use crate::test_utils::{assert_close, basic_statistics};
+    use crate::test_utils::{assert_close, BasicStatistics};
 
     #[test]
     fn smoke_test() {
@@ -170,7 +170,8 @@ mod tests {
             .map(|_| dist.sample_at_t0().as_secs_float())
             .collect();
 
-        let (mean, var) = basic_statistics(&samples);
+        let stats = BasicStatistics::compute(&samples);
+        let (mean, var) = (stats.mean(), stats.variance());
 
         let expected_mean = lambda * gamma(1.0 + 1.0 / k);
         let expected_var = lambda.powi(2) * (gamma(1.0 + 2.0 / k) - gamma(1.0 + 1.0 / k).powi(2));
@@ -196,7 +197,7 @@ mod tests {
 mod tests_tv {
     use super::*;
     use crate::math::gamma;
-    use crate::test_utils::{assert_close, basic_statistics};
+    use crate::test_utils::{assert_close, BasicStatistics};
 
     #[test]
     fn smoke_test() {
@@ -218,7 +219,8 @@ mod tests_tv {
             .map(|_| dist.sample(t).as_secs_float())
             .collect();
 
-        let (mean, var) = basic_statistics(&samples);
+        let stats = BasicStatistics::compute(&samples);
+        let (mean, var) = (stats.mean(), stats.variance());
 
         let expected_mean = lambda * gamma(1.0 + 1.0 / k);
         let expected_var = lambda.powi(2) * (gamma(1.0 + 2.0 / k) - gamma(1.0 + 1.0 / k).powi(2));
