@@ -53,3 +53,7 @@ pub use triangular::TriangularTV;
 pub mod pareto;
 pub use pareto::Pareto;
 pub use pareto::ParetoTV;
+
+pub mod beta;
+pub use beta::Beta;
+pub use beta::BetaTV;
