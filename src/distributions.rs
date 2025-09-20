@@ -49,3 +49,7 @@ pub use weibull::WeibullTV;
 pub mod triangular;
 pub use triangular::Triangular;
 pub use triangular::TriangularTV;
+
+pub mod pareto;
+pub use pareto::Pareto;
+pub use pareto::ParetoTV;

@@ -136,12 +136,7 @@ where
     /// # Be careful!
     /// `alpha` and `theta` values are not checked in release mode! Make sure you fulfill the contract!
     pub fn new(alpha: Fa, theta: Fb, unit: TimeUnit) -> Self {
-        Self {
-            alpha,
-            theta,
-            factor  : unit.factor(),
-            rng     : StdRng::from_os_rng(),
-        }
+        Self { alpha, theta, factor: unit.factor(), rng: StdRng::from_os_rng() }
     }
 
     /// Create a new [GammaErlang] distribution with given random seed
@@ -155,12 +150,7 @@ where
     /// # Be careful!
     /// `alpha` and `theta` values are not checked in release mode! Make sure you fulfill the contract!
     pub fn new_seeded(alpha: Fa, theta: Fb, unit: TimeUnit, seed: u64) -> Self {
-        Self {
-            alpha,
-            theta,
-            factor  : unit.factor(),
-            rng     : StdRng::seed_from_u64(seed),
-        }
+        Self { alpha, theta, factor: unit.factor(), rng: StdRng::seed_from_u64(seed) }
     }
 }
 
@@ -176,7 +166,7 @@ where
     fn sample(&mut self, at: Duration) -> Duration {
         let alpha = (self.alpha)(at);
         let theta = (self.theta)(at);
-        debug_assert!(alpha > 0.0 && theta > 0.0, "Invalid alpha {alpha} or {theta} bound at {at:?}");
+        debug_assert!(alpha > 0.0 && theta > 0.0, "Invalid alpha {alpha} or theta {theta} bound at {at:?}");
         let raw = MarsagliaTsang::sample(&mut self.rng, alpha, theta);
         Duration::from_secs_float(raw * self.factor)
     }
