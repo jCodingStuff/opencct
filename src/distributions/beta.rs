@@ -268,11 +268,6 @@ mod tests_tv {
     #[test]
     #[ignore]
     fn mean_and_variance_time_varying() {
-        // At t=10s
-        let t = Duration::from_secs(10);
-        let alpha_t = 1.0 + t.as_secs_float() * 0.5;
-        let beta_t = 2.0 + t.as_secs_float() * 0.5;
-
         let mut dist = BetaTV::new(
             |t| 1.0 + t.as_secs_float() * 0.5,
             |t| 2.0 + t.as_secs_float() * 0.5,
@@ -280,13 +275,27 @@ mod tests_tv {
         );
 
         let n = 200_000;
-        let samples: Vec<Float> = (0..n).map(|_| dist.sample(t).as_secs_float()).collect();
+        let time_points = [0, 5, 10, 20];
 
-        let stats = BasicStatistics::compute(&samples);
-        let expected_mean = alpha_t / (alpha_t + beta_t);
-        let expected_variance = (alpha_t * beta_t) / ((alpha_t + beta_t).powi(2) * (alpha_t + beta_t + 1.0));
+        for &t_sec in &time_points {
+            let t = Duration::from_secs(t_sec);
 
-        assert_close(stats.mean(), expected_mean, 0.05, "mean");
-        assert_close(stats.variance(), expected_variance, 0.10, "variance");
+            let alpha_t = 1.0 + t.as_secs_float() * 0.5;
+            let beta_t = 2.0 + t.as_secs_float() * 0.5;
+
+            let samples: Vec<Float> = (0..n)
+                .map(|_| dist.sample(t).as_secs_float())
+                .collect();
+
+            let stats = BasicStatistics::compute(&samples);
+
+            let expected_mean = alpha_t / (alpha_t + beta_t);
+            let expected_variance =
+                (alpha_t * beta_t) / ((alpha_t + beta_t).powi(2) * (alpha_t + beta_t + 1.0));
+
+            assert_close(stats.mean(), expected_mean, 0.05, &format!("mean at t={t_sec}s"));
+            assert_close(stats.variance(), expected_variance, 0.10, &format!("variance at t={t_sec}s"));
+        }
     }
+
 }
