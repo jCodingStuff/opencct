@@ -1,7 +1,7 @@
 //! Pareto distribution
 
 use std::time::Duration;
-use rand::Rng;
+use rand::{Rng, RngCore};
 
 use crate::{
     time::{DurationExtension, TimeUnit},
@@ -50,7 +50,7 @@ impl Pareto {
 }
 
 impl Distribution for Pareto {
-    fn sample<R: Rng + ?Sized>(&self, _: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
         let raw = self.xm / rng.random::<Float>().powf(1.0 / self.alpha);
         Duration::from_secs_float(raw * self.factor)
     }
@@ -108,7 +108,7 @@ where
     /// # Panic
     /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
     /// **This is NOT checked in release mode!**
-    fn sample<R: Rng + ?Sized>(&self, at: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (xm, alpha) = ((self.xm)(at), (self.alpha)(at));
         debug_assert!(xm > 0.0 && alpha > 0.0, "Invalid xm {xm} or alpha {alpha} bound at {at:?}");
         let raw = xm / rng.random::<Float>().powf(1.0 / alpha);

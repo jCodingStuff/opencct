@@ -1,7 +1,7 @@
 //! Uniform distribution
 
 use std::time::Duration;
-use rand::Rng;
+use rand::{Rng, RngCore};
 
 use crate::{
     time::{DurationExtension, TimeUnit},
@@ -49,7 +49,7 @@ impl Uniform {
 }
 
 impl Distribution for Uniform {
-    fn sample<R: Rng + ?Sized>(&self, _: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
         let raw = self.min + (self.max - self.min) * rng.random::<Float>();
         Duration::from_secs_float(raw * self.factor)
     }
@@ -106,7 +106,7 @@ where
     /// # Panic
     /// In debug, this function will panic if at the requested time the lower bound is higher than the upper one
     /// or if any of the bounds <= 0. **This is NOT checked in release mode!**
-    fn sample<R: Rng + ?Sized>(&self, at: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let min = (self.min)(at);
         let max = (self.max)(at);
         debug_assert!(min <= max && min >= 0.0, "Invalid bound at {at:?}: [{min}, {max}]");
@@ -303,7 +303,7 @@ mod tests {
         #[test]
         #[ignore]
         fn mean_and_variance() {
-            const N_SAMPLES: usize = 100_000;
+            const N_SAMPLES: usize = 500_000;
             let low = 1.0;
             let high = 5.0;
             let dist = UniformTV::new(|_| low, |_| high, TimeUnit::Seconds);

@@ -1,7 +1,7 @@
 //! Weibull distribution
 
 use std::time::Duration;
-use rand::Rng;
+use rand::{Rng, RngCore};
 
 use crate::{
     time::{DurationExtension, TimeUnit},
@@ -50,7 +50,7 @@ impl Weibull {
 }
 
 impl Distribution for Weibull {
-    fn sample<R: Rng + ?Sized>(&self, _: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
         let raw = self.lambda * (-rng.random::<Float>().ln()).powf(1.0 / self.k);
         Duration::from_secs_float(raw * self.factor)
     }
@@ -108,7 +108,7 @@ where
     /// # Panic
     /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
     /// **This is NOT checked in release mode!**
-    fn sample<R: Rng + ?Sized>(&self, at: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (lambda, k) = ((self.lambda)(at), (self.k)(at));
         debug_assert!(lambda > 0.0 && k > 0.0, "Invalid lambda {lambda} or k {k} bound at {at:?}");
         let raw = lambda * (-rng.random::<Float>().ln()).powf(1.0 / k);
@@ -137,7 +137,7 @@ mod tests {
         #[test]
         #[ignore]
         fn mean_and_variance() {
-            const N_SAMPLES: usize = 100_000;
+            const N_SAMPLES: usize = 500_000;
             let lambda: Float = 2.0;
             let k: Float = 1.5;
             let dist = Weibull::new(lambda, k, TimeUnit::Seconds);
@@ -183,7 +183,7 @@ mod tests {
         #[test]
         #[ignore]
         fn mean_and_variance_at_fixed_time() {
-            const N_SAMPLES: usize = 100_000;
+            const N_SAMPLES: usize = 500_000;
             let lambda: Float = 2.0;
             let k: Float = 1.5;
             let dist = WeibullTV::new(|_| lambda, |_| k, TimeUnit::Seconds);

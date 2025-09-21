@@ -1,7 +1,7 @@
 //! Log-normal distribution
 
 use std::time::Duration;
-use rand::Rng;
+use rand::RngCore;
 
 use crate::{
     time::{DurationExtension, TimeUnit},
@@ -58,7 +58,7 @@ impl LogNormal {
 }
 
 impl Distribution for LogNormal {
-    fn sample<R: Rng + ?Sized>(&self, _: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
         let x = scaled_zignor_method(rng, self.mu, self.sigma);
         Duration::from_secs_float(x.exp() * self.factor)
     }
@@ -121,7 +121,7 @@ where
     /// # Panic
     /// In debug, this function will panic if at the requested time the logarithm of scale <= 0
     /// **This is NOT checked in release mode!**
-    fn sample<R: Rng + ?Sized>(&self, at: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (mu, sigma) = ((self.mu)(at), (self.sigma)(at));
         debug_assert!(sigma > 0.0, "Invalid sigma at {at:?}: {sigma}");
         let x = scaled_zignor_method(rng, mu, sigma);
@@ -163,7 +163,7 @@ mod tests {
         fn mean_and_variance() {
             let mu: Float = 1.0;
             let sigma: Float = 0.5;
-            const N_SAMPLES: usize = 100_000;
+            const N_SAMPLES: usize = 500_000;
 
             let dist = LogNormal::new(mu, sigma, TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
@@ -204,7 +204,7 @@ mod tests {
         fn mean_and_variance_time_varying() {
             let mu_fn = |t: Duration| 0.5 * t.as_secs_float();
             let sigma_fn = |_| 0.25;
-            const N_SAMPLES: usize = 100_000;
+            const N_SAMPLES: usize = 500_000;
 
             let dist = LogNormalTV::new(mu_fn, sigma_fn, TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();

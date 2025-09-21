@@ -1,7 +1,7 @@
 //! Module for probability distributions used in call center simulations.
 
 use std::time::Duration;
-use rand::Rng;
+use rand::RngCore;
 
 /// Trait for probability distributions.
 /// All structs implementing this trait must know that the base unit is seconds.
@@ -12,14 +12,14 @@ pub trait Distribution {
     /// * `rng` - Random number generator
     /// # Returns
     /// * [Duration] - Sampled value from the distribution.
-    fn sample<R: Rng + ?Sized>(&self, at: Duration, rng: &mut R) -> Duration;
+    fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration;
 
     /// Sample a value from the distribution at time 0
     /// # Arguments
     /// * `rng` - Random number generator
     /// # Returns
     /// [Duration] - Sampled value from the distribution.
-    fn sample_at_t0<R: Rng + ?Sized>(&self, rng: &mut R) -> Duration {
+    fn sample_at_t0(&self, rng: &mut dyn RngCore) -> Duration {
         self.sample(Duration::ZERO, rng)
     }
 }
@@ -61,3 +61,7 @@ pub use pareto::ParetoTV;
 pub mod beta;
 pub use beta::Beta;
 pub use beta::BetaTV;
+
+pub mod composite;
+pub use composite::CompositeEntry;
+pub use composite::Composite;

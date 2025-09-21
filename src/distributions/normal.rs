@@ -1,7 +1,7 @@
 //! Normal distribution
 
 use std::time::Duration;
-use rand::Rng;
+use rand::RngCore;
 
 use crate::{
     time::{DurationExtension, TimeUnit},
@@ -59,7 +59,7 @@ impl Normal {
 }
 
 impl Distribution for Normal {
-    fn sample<R: Rng + ?Sized>(&self, _: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
         let x = scaled_zignor_method(rng, self.mu, self.sigma);
         Duration::from_secs_float(x.max(0.0) * self.factor)
     }
@@ -123,7 +123,7 @@ where
     /// # Panic
     /// In debug, this function will panic if at the requested time the standard deviation <= 0
     /// **This is NOT checked in release mode!**
-    fn sample<R: Rng + ?Sized>(&self, at: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (mu, sigma) = ((self.mu)(at), (self.sigma)(at));
         debug_assert!(sigma > 0.0, "Invalid sigma at {at:?}: {sigma}");
         let x = scaled_zignor_method(rng, mu, sigma);
@@ -160,7 +160,7 @@ mod tests {
         #[test]
         #[ignore]
         fn mean_and_variance() {
-            const N_SAMPLES: usize = 100_000;
+            const N_SAMPLES: usize = 500_000;
             let mu = 5.0;
             let sigma = 2.0;
 
@@ -200,7 +200,7 @@ mod tests {
         #[test]
         #[ignore]
         fn mean_and_variance_time_varying() {
-            const N_SAMPLES: usize = 200_000;
+            const N_SAMPLES: usize = 500_000;
 
             let dist = NormalTV::new(
                 |t| 5.0 + t.as_secs_float() * 0.1,

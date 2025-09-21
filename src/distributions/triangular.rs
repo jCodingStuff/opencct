@@ -1,7 +1,7 @@
 //! Triangular distribution
 
 use std::time::Duration;
-use rand::Rng;
+use rand::{Rng, RngCore};
 
 use crate::{
     time::{DurationExtension, TimeUnit},
@@ -55,7 +55,7 @@ impl Triangular {
 }
 
 impl Distribution for Triangular {
-    fn sample<R: Rng + ?Sized>(&self, _: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
         let u = rng.random::<Float>();
         let raw = if u < self.fc {
             self.a + (u*(self.b-self.a)*(self.c-self.a)).sqrt()
@@ -128,7 +128,7 @@ where
     /// # Panic
     /// In debug, this function will panic if at the requested time `a < 0` or `c < a` or `b < c` or `b < a`
     /// **This is NOT checked in release mode!**
-    fn sample<R: Rng + ?Sized>(&self, at: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (a, b, c) = ((self.a)(at), (self.b)(at), (self.c)(at));
         debug_assert!(a >= 0.0 && c >= a && b >= c && b > a, "At t:{at:?} found invalid parameters [a: {a}, b: {b}, c: {c}]");
         let u = rng.random::<Float>();
@@ -189,7 +189,7 @@ mod tests {
         #[test]
         #[ignore]
         fn mean_and_variance() {
-            const N_SAMPLES: usize = 100_000;
+            const N_SAMPLES: usize = 500_000;
             let a = 1.0;
             let b = 5.0;
             let c = 3.0;
@@ -227,7 +227,7 @@ mod tests {
         #[test]
         #[ignore]
         fn mean_and_variance() {
-            const N_SAMPLES: usize = 100_000;
+            const N_SAMPLES: usize = 500_000;
             let a = 1.0;
             let b = 5.0;
             let c = 3.0;

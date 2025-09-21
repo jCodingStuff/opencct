@@ -1,7 +1,7 @@
 //! Exponential distribution
 
 use std::time::Duration;
-use rand::Rng;
+use rand::{Rng, RngCore};
 
 use crate::{
     time::{DurationExtension, TimeUnit},
@@ -46,7 +46,7 @@ impl Exponential {
 }
 
 impl Distribution for Exponential {
-    fn sample<R: Rng + ?Sized>(&self, _: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
         let raw = -rng.random::<Float>().ln() / self.lambda;
         Duration::from_secs_float(raw * self.factor)
     }
@@ -98,7 +98,7 @@ where
     /// # Panic
     /// In debug, this function will panic if at the requested time the rate parameter <= 0.
     /// **This is NOT checked in release mode!**
-    fn sample<R: Rng + ?Sized>(&self, at: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let lambda = (self.lambda)(at);
         debug_assert!(lambda > 0.0, "Invalid lambda at {at:?}: {lambda}");
         let raw = -rng.random::<Float>().ln() / lambda;
@@ -142,7 +142,7 @@ mod tests {
         #[test]
         #[ignore] // statistical test, expensive
         fn mean_and_variance_large_sample() {
-            const N_SAMPLES: usize = 100_000;
+            const N_SAMPLES: usize = 500_000;
             const MEAN_TOL: Float = 0.01;
             const VAR_TOL: Float = 0.02;
 
@@ -205,7 +205,7 @@ mod tests {
         #[test]
         #[ignore] // statistical test, expensive
         fn mean_and_variance_time_varying() {
-            const N_SAMPLES: usize = 100_000;
+            const N_SAMPLES: usize = 500_000;
             const MEAN_TOL: Float = 0.02;
             const VAR_TOL: Float = 0.03;
 

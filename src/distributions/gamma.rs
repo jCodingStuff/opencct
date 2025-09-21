@@ -3,7 +3,7 @@
 //! Erlang is just a Gamma with an integer shape parameter
 
 use std::time::Duration;
-use rand::Rng;
+use rand::RngCore;
 
 use crate::{
     time::{DurationExtension, TimeUnit},
@@ -60,7 +60,7 @@ impl GammaErlang {
 }
 
 impl Distribution for GammaErlang {
-    fn sample<R: Rng + ?Sized>(&self, _: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
         let raw = self.method.sample_from_setup(rng, self.theta);
         Duration::from_secs_float(raw * self.factor)
     }
@@ -123,7 +123,7 @@ where
     /// # Panic
     /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
     /// **This is NOT checked in release mode!**
-    fn sample<R: Rng + ?Sized>(&self, at: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let alpha = (self.alpha)(at);
         let theta = (self.theta)(at);
         debug_assert!(alpha > 0.0 && theta > 0.0, "Invalid alpha {alpha} or theta {theta} bound at {at:?}");
@@ -174,7 +174,7 @@ mod tests {
         #[test]
         #[ignore] // statistical test, expensive
         fn mean_and_variance_large_sample() {
-            const N_SAMPLES: usize = 100_000;
+            const N_SAMPLES: usize = 500_000;
 
             let alpha = 2.0;
             let theta = 3.0;
@@ -208,7 +208,7 @@ mod tests {
         #[test]
         #[ignore] // statistical test, expensive
         fn mean_and_variance_large_sample_tv() {
-            const N_SAMPLES: usize = 100_000;
+            const N_SAMPLES: usize = 500_000;
 
             let alpha = 2.0;
             let theta = 3.0;

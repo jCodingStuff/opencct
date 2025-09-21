@@ -1,7 +1,7 @@
 //! Beta distribution
 
 use std::time::Duration;
-use rand::Rng;
+use rand::RngCore;
 
 use crate::{
     time::{DurationExtension, TimeUnit},
@@ -62,7 +62,7 @@ impl Beta {
 }
 
 impl Distribution for Beta {
-    fn sample<R: Rng + ?Sized>(&self, _: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
         let x = self.method_alpha.sample_from_setup(rng, 1.0);
         let y = self.method_beta.sample_from_setup(rng, 1.0);
         Duration::from_secs_float(x / (x + y) * self.factor)
@@ -126,7 +126,7 @@ where
     /// # Panic
     /// In debug, this function will panic if at the requested time either of the shape parameters is <= 0.
     /// **This is NOT checked in release mode!**
-    fn sample<R: Rng + ?Sized>(&self, at: Duration, rng: &mut R) -> Duration {
+    fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let alpha = (self.alpha)(at);
         let beta = (self.beta)(at);
         debug_assert!(alpha > 0.0 && beta > 0.0, "Invalid alpha {alpha} or beta {beta} bound at {at:?}");
@@ -177,7 +177,7 @@ mod tests {
             let beta = 5.0;
             let dist = Beta::new(alpha, beta, TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
-            const N: usize = 200_000;
+            const N: usize = 500_000;
 
             let samples: Vec<Float> = (0..N)
                 .map(|_| dist.sample_at_t0(&mut rng).as_secs_float())
@@ -222,7 +222,7 @@ mod tests {
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();
-            const N: usize = 200_000;
+            const N: usize = 500_000;
             let time_points = [0, 5, 10, 20];
 
             for &t_sec in &time_points {
