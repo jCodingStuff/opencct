@@ -213,7 +213,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // statistical test, expensive
+    #[ignore]
     fn mean_and_variance() {
         let alpha = 2.0;
         let beta = 5.0;
@@ -235,6 +235,7 @@ mod tests {
 #[cfg(test)]
 mod tests_tv {
     use super::*;
+    use crate::test_utils::{BasicStatistics, assert_close};
 
     #[test]
     fn tv_samples_positive() {
@@ -262,5 +263,30 @@ mod tests_tv {
             let v2 = dist2.sample_at_t0().as_secs_float();
             assert_eq!(v1, v2, "TV seeded distributions diverged: {v1} vs {v2}");
         }
+    }
+
+    #[test]
+    #[ignore]
+    fn mean_and_variance_time_varying() {
+        // At t=10s
+        let t = Duration::from_secs(10);
+        let alpha_t = 1.0 + t.as_secs_float() * 0.5;
+        let beta_t = 2.0 + t.as_secs_float() * 0.5;
+
+        let mut dist = BetaTV::new(
+            |t| 1.0 + t.as_secs_float() * 0.5,
+            |t| 2.0 + t.as_secs_float() * 0.5,
+            TimeUnit::Seconds,
+        );
+
+        let n = 200_000;
+        let samples: Vec<Float> = (0..n).map(|_| dist.sample(t).as_secs_float()).collect();
+
+        let stats = BasicStatistics::compute(&samples);
+        let expected_mean = alpha_t / (alpha_t + beta_t);
+        let expected_variance = (alpha_t * beta_t) / ((alpha_t + beta_t).powi(2) * (alpha_t + beta_t + 1.0));
+
+        assert_close(stats.mean(), expected_mean, 0.05, "mean");
+        assert_close(stats.variance(), expected_variance, 0.10, "variance");
     }
 }
