@@ -3,10 +3,7 @@
 //! Erlang is just a Gamma with an integer shape parameter
 
 use std::time::Duration;
-use rand::{
-    rngs::StdRng,
-    SeedableRng,
-};
+use rand::Rng;
 
 use crate::{
     time::{DurationExtension, TimeUnit},
@@ -27,11 +24,13 @@ use super::{
 /// # Example
 /// ```
 /// use std::time::Duration;
+/// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, GammaErlang};
 /// use opencct::time::TimeUnit;
 ///
-/// let mut dist = GammaErlang::new(1.0, 3.0, TimeUnit::Seconds);
-/// let sample = dist.sample_at_t0();
+/// let mut rng = StdRng::from_os_rng();
+/// let dist = GammaErlang::new(1.0, 3.0, TimeUnit::Seconds);
+/// let sample = dist.sample_at_t0(&mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
 pub struct GammaErlang {
@@ -39,8 +38,6 @@ pub struct GammaErlang {
     theta   : Float,
     /// Time unit factor
     factor  : Float,
-    /// Random number generator
-    rng     : StdRng,
     /// Sampling method struct
     method  : MarsagliaTsang,
 }
@@ -57,38 +54,13 @@ impl GammaErlang {
     /// This function panics if either `alpha` or `theta` are <= 0
     pub fn new(alpha: Float, theta: Float, unit: TimeUnit) -> Self {
         assert!(alpha > 0.0 && theta > 0.0, "Invalid alpha {alpha} or theta {theta}");
-        Self {
-            theta,
-            factor  : unit.factor(),
-            rng     : StdRng::from_os_rng(),
-            method  : MarsagliaTsang::setup(alpha),
-        }
-    }
-
-    /// Create a new [GammaErlang] distribution with given random seed
-    /// # Arguments
-    /// * `alpha` - Shape
-    /// * `theta` - Scale
-    /// * `unit` - The [TimeUnit] that the distribution samples.
-    /// * `seed` - Seed for the random number generator.
-    /// # Returns
-    /// * A new [GammaErlang].
-    /// # Panic
-    /// This function panics if either `alpha` or `theta` are <= 0
-    pub fn new_seeded(alpha: Float, theta: Float, unit: TimeUnit, seed: u64) -> Self {
-        assert!(alpha > 0.0 && theta > 0.0, "Invalid alpha {alpha} or theta {theta}");
-        Self {
-            theta,
-            factor  : unit.factor(),
-            rng     : StdRng::seed_from_u64(seed),
-            method  : MarsagliaTsang::setup(alpha),
-        }
+        Self {theta, factor: unit.factor(), method: MarsagliaTsang::setup(alpha) }
     }
 }
 
 impl Distribution for GammaErlang {
-    fn sample(&mut self, _: Duration) -> Duration {
-        let raw = self.method.sample_from_setup(&mut self.rng, self.theta);
+    fn sample<R: Rng + ?Sized>(&self, _: Duration, rng: &mut R) -> Duration {
+        let raw = self.method.sample_from_setup(rng, self.theta);
         Duration::from_secs_float(raw * self.factor)
     }
 }
@@ -103,11 +75,13 @@ impl Distribution for GammaErlang {
 /// # Example
 /// ```
 /// use std::time::Duration;
+/// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, GammaErlangTV};
 /// use opencct::time::{TimeUnit, DurationExtension};
 ///
-/// let mut dist = GammaErlangTV::new(|t| 1.0 + t.as_secs_float() * 0.1, |t| 3.0 + t.as_secs_float() * 0.1, TimeUnit::Seconds);
-/// let sample = dist.sample_at_t0();
+/// let mut rng = StdRng::from_os_rng();
+/// let dist = GammaErlangTV::new(|t| 1.0 + t.as_secs_float() * 0.1, |t| 3.0 + t.as_secs_float() * 0.1, TimeUnit::Seconds);
+/// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
 pub struct GammaErlangTV<Fa, Fb> {
@@ -117,8 +91,6 @@ pub struct GammaErlangTV<Fa, Fb> {
     theta   : Fb,
     /// Time unit factor
     factor  : Float,
-    /// Random number generator
-    rng     : StdRng,
 }
 
 impl<Fa, Fb> GammaErlangTV<Fa, Fb>
@@ -136,21 +108,7 @@ where
     /// # Be careful!
     /// `alpha` and `theta` values are not checked in release mode! Make sure you fulfill the contract!
     pub fn new(alpha: Fa, theta: Fb, unit: TimeUnit) -> Self {
-        Self { alpha, theta, factor: unit.factor(), rng: StdRng::from_os_rng() }
-    }
-
-    /// Create a new [GammaErlang] distribution with given random seed
-    /// # Arguments
-    /// * `alpha` - Function to compute the shape at a given time. Must be > 0 for any t >= 0
-    /// * `theta` - Function to compute the scale at a given time. Must be > 0 for any t >= 0
-    /// * `unit` - The [TimeUnit] that the distribution samples.
-    /// * `seed` - Seed for the random number generator.
-    /// # Returns
-    /// * A new [GammaErlang].
-    /// # Be careful!
-    /// `alpha` and `theta` values are not checked in release mode! Make sure you fulfill the contract!
-    pub fn new_seeded(alpha: Fa, theta: Fb, unit: TimeUnit, seed: u64) -> Self {
-        Self { alpha, theta, factor: unit.factor(), rng: StdRng::seed_from_u64(seed) }
+        Self { alpha, theta, factor: unit.factor() }
     }
 }
 
@@ -163,11 +121,11 @@ where
     /// # Panic
     /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
     /// **This is NOT checked in release mode!**
-    fn sample(&mut self, at: Duration) -> Duration {
+    fn sample<R: Rng + ?Sized>(&self, at: Duration, rng: &mut R) -> Duration {
         let alpha = (self.alpha)(at);
         let theta = (self.theta)(at);
         debug_assert!(alpha > 0.0 && theta > 0.0, "Invalid alpha {alpha} or theta {theta} bound at {at:?}");
-        let raw = MarsagliaTsang::sample(&mut self.rng, alpha, theta);
+        let raw = MarsagliaTsang::sample(rng, alpha, theta);
         Duration::from_secs_float(raw * self.factor)
     }
 }
@@ -175,120 +133,109 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::{rngs::StdRng, SeedableRng};
     use crate::test_utils::{BasicStatistics, assert_close};
 
-    #[test]
-    #[should_panic]
-    fn new_panics_on_zero_alpha() {
-        let _ = GammaErlang::new(0.0, 1.0, TimeUnit::Seconds);
-    }
+    mod gamma_erlang {
+        use super::*;
 
-    #[test]
-    #[should_panic]
-    fn new_panics_on_zero_theta() {
-        let _ = GammaErlang::new(1.0, 0.0, TimeUnit::Seconds);
-    }
+        #[test]
+        #[should_panic]
+        fn new_panics_on_zero_alpha() {
+            let _ = GammaErlang::new(0.0, 1.0, TimeUnit::Seconds);
+        }
 
-    #[test]
-    fn smoke_sample() {
-        let mut dist = GammaErlang::new(2.0, 3.0, TimeUnit::Seconds);
-        let _ = dist.sample_at_t0();
-    }
+        #[test]
+        #[should_panic]
+        fn new_panics_on_zero_theta() {
+            let _ = GammaErlang::new(1.0, 0.0, TimeUnit::Seconds);
+        }
 
-    #[test]
-    fn reproducible_with_seed() {
-        let seed = 42;
-        let mut dist1 = GammaErlang::new_seeded(2.5, 1.0, TimeUnit::Seconds, seed);
-        let mut dist2 = GammaErlang::new_seeded(2.5, 1.0, TimeUnit::Seconds, seed);
+        #[test]
+        fn smoke_sample() {
+            let dist = GammaErlang::new(2.0, 3.0, TimeUnit::Seconds);
+            let mut rng = StdRng::from_os_rng();
+            let _ = dist.sample_at_t0(&mut rng);
+        }
 
-        for _ in 0..1000 {
-            let val1 = dist1.sample_at_t0();
-            let val2 = dist2.sample_at_t0();
-            assert_eq!(val1, val2, "Values should be equal with same seed");
+        #[test]
+        fn values_are_finite() {
+            let dist = GammaErlang::new(3.0, 2.0, TimeUnit::Seconds);
+            let mut rng = StdRng::from_os_rng();
+
+            for _ in 0..10_000 {
+                let x = dist.sample_at_t0(&mut rng).as_secs_float();
+                assert!(x.is_finite(), "Generated value is not finite: {x}");
+            }
+        }
+
+        #[test]
+        #[ignore] // statistical test, expensive
+        fn mean_and_variance_large_sample() {
+            const N_SAMPLES: usize = 100_000;
+
+            let alpha = 2.0;
+            let theta = 3.0;
+            let dist = GammaErlang::new(alpha, theta, TimeUnit::Seconds);
+            let mut rng = StdRng::from_os_rng();
+
+            let samples: Vec<Float> = (0..N_SAMPLES)
+                .map(|_| dist.sample_at_t0(&mut rng).as_secs_float())
+                .collect();
+
+            let stats = BasicStatistics::compute(&samples);
+            let expected_mean = alpha * theta;
+            let expected_var = alpha * theta.powi(2);
+
+            assert_close(stats.mean(), expected_mean, 0.01, "GammaErlang mean"); // 1% tolerance
+            assert_close(stats.variance(), expected_var, 0.02, "GammaErlang variance"); // 2% tolerance
         }
     }
 
-    #[test]
-    fn values_are_finite() {
-        let mut dist = GammaErlang::new(3.0, 2.0, TimeUnit::Seconds);
+    mod gamma_erlang_tv {
+        use super::*;
 
-        for _ in 0..10_000 {
-            let x = dist.sample_at_t0().as_secs_float();
-            assert!(x.is_finite(), "Generated value is not finite: {x}");
+        #[test]
+        fn smoke_sample_tv() {
+            let dist = GammaErlangTV::new(|_| 2.0, |_| 3.0, TimeUnit::Seconds);
+            let mut rng = StdRng::from_os_rng();
+            let _ = dist.sample_at_t0(&mut rng);
+            let _ = dist.sample(Duration::from_secs(5), &mut rng);
         }
-    }
 
-    #[test]
-    #[ignore]
-    fn mean_and_variance_large_sample() {
-        const N_SAMPLES: usize = 100_000;
+        #[test]
+        #[ignore] // statistical test, expensive
+        fn mean_and_variance_large_sample_tv() {
+            const N_SAMPLES: usize = 100_000;
 
-        let alpha = 2.0;
-        let theta = 3.0;
-        let mut dist = GammaErlang::new(alpha, theta, TimeUnit::Seconds);
+            let alpha = 2.0;
+            let theta = 3.0;
+            let dist = GammaErlangTV::new(|_| alpha, |_| theta, TimeUnit::Seconds);
+            let mut rng = StdRng::from_os_rng();
 
-        let samples: Vec<Float> = (0..N_SAMPLES)
-            .map(|_| dist.sample_at_t0().as_secs_float())
-            .collect();
+            for t_sec in [0, 5, 10] {
+                let t = Duration::from_secs(t_sec);
+                let samples: Vec<Float> = (0..N_SAMPLES)
+                    .map(|_| dist.sample(t, &mut rng).as_secs_float())
+                    .collect();
 
-        let stats = BasicStatistics::compute(&samples);
-        let (mean, var) = (stats.mean(), stats.variance());
+                let stats = BasicStatistics::compute(&samples);
+                let expected_mean = alpha * theta;
+                let expected_var = alpha * theta.powi(2);
 
-        let expected_mean = alpha * theta;
-        let expected_var = alpha * theta.powi(2);
-
-        assert_close(mean, expected_mean, 0.01, "GammaErlang mean"); // 1% tolerance
-        assert_close(var, expected_var, 0.02, "GammaErlang variance"); // 2% tolerance
-    }
-}
-
-#[cfg(test)]
-mod tests_tv {
-    use super::*;
-    use crate::test_utils::{BasicStatistics, assert_close};
-    use std::time::Duration;
-
-    #[test]
-    fn smoke_sample_tv() {
-        let mut dist = GammaErlangTV::new(|_| 2.0, |_| 3.0, TimeUnit::Seconds);
-        let _ = dist.sample_at_t0();
-        let _ = dist.sample(Duration::from_secs(5));
-    }
-
-    #[test]
-    fn reproducible_with_seed_tv() {
-        let seed = 99;
-        let mut dist1 = GammaErlangTV::new_seeded(|_| 2.5, |_| 1.0, TimeUnit::Seconds, seed);
-        let mut dist2 = GammaErlangTV::new_seeded(|_| 2.5, |_| 1.0, TimeUnit::Seconds, seed);
-
-        for _ in 0..1000 {
-            let val1 = dist1.sample_at_t0();
-            let val2 = dist2.sample_at_t0();
-            assert_eq!(val1, val2, "Values should be equal with same seed");
+                assert_close(
+                    stats.mean(),
+                    expected_mean,
+                    0.01,
+                    &format!("GammaErlangTV mean at t={t_sec}"),
+                );
+                assert_close(
+                    stats.variance(),
+                    expected_var,
+                    0.02,
+                    &format!("GammaErlangTV variance at t={t_sec}"),
+                );
+            }
         }
-    }
-
-    #[test]
-    #[ignore]
-    fn mean_and_variance_large_sample_tv() {
-        const N_SAMPLES: usize = 100_000;
-
-        let alpha = 2.0;
-        let theta = 3.0;
-
-        let mut dist = GammaErlangTV::new(|_| alpha, |_| theta, TimeUnit::Seconds);
-
-        let samples: Vec<Float> = (0..N_SAMPLES)
-            .map(|_| dist.sample_at_t0().as_secs_float())
-            .collect();
-
-        let stats = BasicStatistics::compute(&samples);
-        let (mean, var) = (stats.mean(), stats.variance());
-
-        let expected_mean = alpha * theta;
-        let expected_var = alpha * theta.powi(2);
-
-        assert_close(mean, expected_mean, 0.01, "GammaErlangTV mean");
-        assert_close(var, expected_var, 0.02, "GammaErlangTV variance");
     }
 }

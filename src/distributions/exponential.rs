@@ -1,11 +1,7 @@
 //! Exponential distribution
 
 use std::time::Duration;
-use rand::{
-    rngs::StdRng,
-    Rng,
-    SeedableRng,
-};
+use rand::Rng;
 
 use crate::{
     time::{DurationExtension, TimeUnit},
@@ -17,11 +13,13 @@ use super::Distribution;
 /// # Example
 /// ```
 /// use std::time::Duration;
+/// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, Exponential};
 /// use opencct::time::TimeUnit;
 ///
-/// let mut dist = Exponential::new(1.0, TimeUnit::Seconds);
-/// let sample = dist.sample_at_t0();
+/// let mut rng = StdRng::from_os_rng();
+/// let dist = Exponential::new(1.0, TimeUnit::Seconds);
+/// let sample = dist.sample_at_t0(&mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
 pub struct Exponential {
@@ -29,8 +27,6 @@ pub struct Exponential {
     lambda  : Float,
     /// Time unit factor
     factor  : Float,
-    /// Random number generator
-    rng     : StdRng,
 }
 
 impl Exponential {
@@ -44,27 +40,13 @@ impl Exponential {
     /// This function panics if `lambda <= 0`
     pub fn new(lambda: Float, unit: TimeUnit) -> Self {
         assert!(lambda > 0.0, "Lambda ({lambda}) must be > 0");
-        Self { lambda, factor: unit.factor(), rng: StdRng::from_os_rng() }
-    }
-
-    /// Create a new [Exponential] distribution with a specified random seed.
-    /// # Arguments
-    /// * `lambda` - Rate parameter
-    /// * `unit` - The [TimeUnit] that the distribution samples.
-    /// * `seed` - Seed for the random number generator.
-    /// # Returns
-    /// A new [Exponential].
-    /// # Panic
-    /// This function panics if `lambda <= 0`
-    pub fn new_seeded(lambda: Float, unit: TimeUnit, seed: u64) -> Self {
-        assert!(lambda > 0.0, "Lambda ({lambda}) must be > 0");
-        Self { lambda, factor: unit.factor(), rng: StdRng::seed_from_u64(seed) }
+        Self { lambda, factor: unit.factor() }
     }
 }
 
 impl Distribution for Exponential {
-    fn sample(&mut self, _: Duration) -> Duration {
-        let raw = - self.rng.random::<Float>().ln() / self.lambda;
+    fn sample<R: Rng + ?Sized>(&self, _: Duration, rng: &mut R) -> Duration {
+        let raw = -rng.random::<Float>().ln() / self.lambda;
         Duration::from_secs_float(raw * self.factor)
     }
 }
@@ -73,11 +55,13 @@ impl Distribution for Exponential {
 /// # Example
 /// ```
 /// use std::time::Duration;
+/// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, ExponentialTV};
 /// use opencct::time::{DurationExtension, TimeUnit};
 ///
-/// let mut dist = ExponentialTV::new(|t| 1.0 + t.as_secs_float() * 0.1, TimeUnit::Seconds);
-/// let sample = dist.sample(Duration::from_secs(10));
+/// let mut rng = StdRng::from_os_rng();
+/// let dist = ExponentialTV::new(|t| 1.0 + t.as_secs_float() * 0.1, TimeUnit::Seconds);
+/// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
 pub struct ExponentialTV<F> {
@@ -85,8 +69,6 @@ pub struct ExponentialTV<F> {
     lambda   : F,
     /// Time unit factor
     factor  : Float,
-    /// Random number generator
-    rng     : StdRng,
 }
 
 impl<F> ExponentialTV<F>
@@ -102,20 +84,7 @@ where
     /// # Be careful!
     /// `lambda` is not checked in release mode! Make sure you fulfill the bounds!
     pub fn new(lambda: F, unit: TimeUnit) -> Self {
-        Self { lambda, factor: unit.factor(), rng: StdRng::from_os_rng() }
-    }
-
-    /// Create a new [ExponentialTV] distribution with a specified random seed.
-    /// # Arguments
-    /// * `lambda` - Function to compute the rate parameter at a given time. Must be > 0 for any t >= 0
-    /// * `unit` - The [TimeUnit] that the distribution samples.
-    /// * `seed` - Seed for the random number generator.
-    /// # Returns
-    /// A new [ExponentialTV].
-    /// # Be careful!
-    /// `lambda` is not checked in release mode! Make sure you fulfill the bounds!
-    pub fn new_seeded(lambda: F, unit: TimeUnit, seed: u64 ) -> Self {
-        Self { lambda, factor: unit.factor(), rng: StdRng::seed_from_u64(seed) }
+        Self { lambda, factor: unit.factor() }
     }
 }
 
@@ -127,10 +96,10 @@ where
     /// # Panic
     /// In debug, this function will panic if at the requested time the rate parameter <= 0.
     /// **This is NOT checked in release mode!**
-    fn sample(&mut self, at: Duration) -> Duration {
+    fn sample<R: Rng + ?Sized>(&self, at: Duration, rng: &mut R) -> Duration {
         let lambda = (self.lambda)(at);
         debug_assert!(lambda > 0.0, "Invalid lambda at {at:?}: {lambda}");
-        let raw = - self.rng.random::<Float>().ln() / lambda;
+        let raw = -rng.random::<Float>().ln() / lambda;
         Duration::from_secs_float(raw * self.factor)
     }
 }
@@ -138,163 +107,153 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::{rngs::StdRng, SeedableRng};
     use crate::test_utils::{BasicStatistics, assert_close};
 
-    #[test]
-    #[should_panic]
-    fn new_panics_on_zero_lambda() {
-        let _ = Exponential::new(0.0, TimeUnit::Seconds);
-    }
+    mod exponential {
+        use super::*;
 
-    #[test]
-    fn smoke_sample() {
-        let mut dist = Exponential::new(1.5, TimeUnit::Seconds);
-        let _ = dist.sample_at_t0();
-    }
-
-    #[test]
-    fn reproducible_with_seed() {
-        let lambda = 2.0;
-        let seed = 42;
-        let mut dist1 = Exponential::new_seeded(lambda, TimeUnit::Seconds, seed);
-        let mut dist2 = Exponential::new_seeded(lambda, TimeUnit::Seconds, seed);
-
-        for _ in 0..100 {
-            let val1 = dist1.sample_at_t0().as_secs_float();
-            let val2 = dist2.sample_at_t0().as_secs_float();
-            assert_eq!(val1, val2, "Values should be equal with same seed");
+        #[test]
+        #[should_panic]
+        fn new_panics_on_zero_lambda() {
+            let _ = Exponential::new(0.0, TimeUnit::Seconds);
         }
-    }
 
-    #[test]
-    fn values_are_finite() {
-        let mut dist = Exponential::new(1.0, TimeUnit::Seconds);
-
-        for _ in 0..10_000 {
-            let x = dist.sample_at_t0().as_secs_float();
-            assert!(x.is_finite(), "Generated value is not finite: {x}");
+        #[test]
+        fn smoke_sample() {
+            let dist = Exponential::new(1.5, TimeUnit::Seconds);
+            let mut rng = StdRng::from_os_rng();
+            let _ = dist.sample_at_t0(&mut rng);
         }
-    }
 
-    #[test]
-    #[ignore]
-    fn mean_and_variance_large_sample() {
-        const N_SAMPLES: usize = 100_000;
-        const MEAN_TOL: Float = 0.01;
-        const VAR_TOL: Float = 0.02;
+        #[test]
+        fn values_are_finite() {
+            let dist = Exponential::new(1.0, TimeUnit::Seconds);
+            let mut rng = StdRng::from_os_rng();
 
-        let lambda = 2.0;
-        let mut dist = Exponential::new(lambda, TimeUnit::Seconds);
-
-        let samples: Vec<Float> = (0..N_SAMPLES)
-            .map(|_| dist.sample_at_t0().as_secs_float())
-            .collect();
-
-        let stats = BasicStatistics::compute(&samples);
-        let (mean, var) = (stats.mean(), stats.variance());
-
-        let expected_mean = 1.0 / lambda;
-        let expected_var = 1.0 / (lambda * lambda);
-
-        assert_close(mean, expected_mean, MEAN_TOL, "Exponential mean");
-        assert_close(var, expected_var, VAR_TOL, "Exponential variance");
-    }
-
-    #[test]
-    fn all_time_units() {
-        let lambda = 1.0;
-        let units = [
-            TimeUnit::Days,
-            TimeUnit::Hours,
-            TimeUnit::Minutes,
-            TimeUnit::Seconds,
-            TimeUnit::Millis,
-            TimeUnit::Nanos,
-        ];
-
-        for &unit in &units {
-            let mut dist = Exponential::new(lambda, unit);
-            let sample = dist.sample_at_t0().as_secs_float();
-            assert!(sample >= 0.0, "Sample {} should be >= 0 for unit {:?}", sample, unit);
+            for _ in 0..10_000 {
+                let x = dist.sample_at_t0(&mut rng).as_secs_float();
+                assert!(x.is_finite(), "Generated value is not finite: {x}");
+            }
         }
-    }
-}
 
-#[cfg(test)]
-mod tests_tv {
-    use super::*;
-    use crate::test_utils::{BasicStatistics, assert_close};
+        #[test]
+        #[ignore] // statistical test, expensive
+        fn mean_and_variance_large_sample() {
+            const N_SAMPLES: usize = 100_000;
+            const MEAN_TOL: Float = 0.01;
+            const VAR_TOL: Float = 0.02;
 
-    #[test]
-    fn smoke_sample_tv() {
-        let mut dist = ExponentialTV::new(|t| 1.0 + t.as_secs_float() * 0.1, TimeUnit::Seconds);
-        let _ = dist.sample_at_t0();
-        let _ = dist.sample(Duration::from_secs(5));
-    }
-
-    #[test]
-    fn reproducible_with_seed_tv() {
-        let seed = 123;
-        let mut dist1 = ExponentialTV::new_seeded(|_| 1.5, TimeUnit::Seconds, seed);
-        let mut dist2 = ExponentialTV::new_seeded(|_| 1.5, TimeUnit::Seconds, seed);
-
-        for _ in 0..100 {
-            let val1 = dist1.sample_at_t0().as_secs_float();
-            let val2 = dist2.sample_at_t0().as_secs_float();
-            assert_eq!(val1, val2, "Values should be equal with same seed");
-        }
-    }
-
-    #[test]
-    #[should_panic]
-    fn invalid_lambda_panics() {
-        let mut dist = ExponentialTV::new(|_| 0.0, TimeUnit::Seconds);
-        dist.sample_at_t0();
-    }
-
-    #[test]
-    #[ignore]
-    fn mean_and_variance_time_varying() {
-        const N_SAMPLES: usize = 100_000;
-        const MEAN_TOL: Float = 0.02;
-        const VAR_TOL: Float = 0.03;
-
-        let mut dist = ExponentialTV::new(|t| 1.0 + t.as_secs_float() * 0.1, TimeUnit::Seconds);
-
-        for t_sec in [0, 5, 10] {
-            let t = Duration::from_secs(t_sec);
-            let lambda = 1.0 + t_sec as Float * 0.1;
+            let lambda = 2.0;
+            let dist = Exponential::new(lambda, TimeUnit::Seconds);
+            let mut rng = StdRng::from_os_rng();
 
             let samples: Vec<Float> = (0..N_SAMPLES)
-                .map(|_| dist.sample(t).as_secs_float())
+                .map(|_| dist.sample_at_t0(&mut rng).as_secs_float())
                 .collect();
 
             let stats = BasicStatistics::compute(&samples);
-            let (mean, var) = (stats.mean(), stats.variance());
-
             let expected_mean = 1.0 / lambda;
             let expected_var = 1.0 / (lambda * lambda);
 
-            assert_close(mean, expected_mean, MEAN_TOL, &format!("ExponentialTV mean at t={}", t_sec));
-            assert_close(var, expected_var, VAR_TOL, &format!("ExponentialTV variance at t={}", t_sec));
+            assert_close(stats.mean(), expected_mean, MEAN_TOL, "Exponential mean");
+            assert_close(stats.variance(), expected_var, VAR_TOL, "Exponential variance");
+        }
+
+        #[test]
+        fn all_time_units() {
+            let lambda = 1.0;
+            let units = [
+                TimeUnit::Days,
+                TimeUnit::Hours,
+                TimeUnit::Minutes,
+                TimeUnit::Seconds,
+                TimeUnit::Millis,
+                TimeUnit::Nanos,
+            ];
+            let mut rng = StdRng::from_os_rng();
+
+            for &unit in &units {
+                let dist = Exponential::new(lambda, unit);
+                let sample = dist.sample_at_t0(&mut rng).as_secs_float();
+                assert!(sample >= 0.0, "Sample {} should be >= 0 for unit {:?}", sample, unit);
+            }
         }
     }
 
-    #[test]
-    fn all_time_units() {
-        let units = [
-            TimeUnit::Days,
-            TimeUnit::Hours,
-            TimeUnit::Minutes,
-            TimeUnit::Seconds,
-            TimeUnit::Millis,
-            TimeUnit::Nanos,
-        ];
+    mod exponential_tv {
+        use super::*;
 
-        for &unit in &units {
-            let mut dist_tv = ExponentialTV::new(|_| 1.0, unit);
-            let sample_tv = dist_tv.sample(Duration::from_secs(0)).as_secs_float();
-            assert!(sample_tv >= 0.0, "ExponentialTV sample {} should be >= 0 for unit {:?}", sample_tv, unit);
+        #[test]
+        fn smoke_sample_tv() {
+            let dist = ExponentialTV::new(|t| 1.0 + t.as_secs_float() * 0.1, TimeUnit::Seconds);
+            let mut rng = StdRng::from_os_rng();
+            let _ = dist.sample_at_t0(&mut rng);
+            let _ = dist.sample(Duration::from_secs(5), &mut rng);
+        }
+
+        #[test]
+        #[should_panic]
+        fn invalid_lambda_panics() {
+            let dist = ExponentialTV::new(|_| 0.0, TimeUnit::Seconds);
+            let mut rng = StdRng::from_os_rng();
+            dist.sample_at_t0(&mut rng);
+        }
+
+        #[test]
+        #[ignore] // statistical test, expensive
+        fn mean_and_variance_time_varying() {
+            const N_SAMPLES: usize = 100_000;
+            const MEAN_TOL: Float = 0.02;
+            const VAR_TOL: Float = 0.03;
+
+            let dist = ExponentialTV::new(|t| 1.0 + t.as_secs_float() * 0.1, TimeUnit::Seconds);
+            let mut rng = StdRng::from_os_rng();
+
+            for t_sec in [0, 5, 10] {
+                let t = Duration::from_secs(t_sec);
+                let lambda = 1.0 + t_sec as Float * 0.1;
+
+                let samples: Vec<Float> = (0..N_SAMPLES)
+                    .map(|_| dist.sample(t, &mut rng).as_secs_float())
+                    .collect();
+
+                let stats = BasicStatistics::compute(&samples);
+                let expected_mean = 1.0 / lambda;
+                let expected_var = 1.0 / (lambda * lambda);
+
+                assert_close(
+                    stats.mean(),
+                    expected_mean,
+                    MEAN_TOL,
+                    &format!("ExponentialTV mean at t={}", t_sec),
+                );
+                assert_close(
+                    stats.variance(),
+                    expected_var,
+                    VAR_TOL,
+                    &format!("ExponentialTV variance at t={}", t_sec),
+                );
+            }
+        }
+
+        #[test]
+        fn all_time_units() {
+            let units = [
+                TimeUnit::Days,
+                TimeUnit::Hours,
+                TimeUnit::Minutes,
+                TimeUnit::Seconds,
+                TimeUnit::Millis,
+                TimeUnit::Nanos,
+            ];
+            let mut rng = StdRng::from_os_rng();
+
+            for &unit in &units {
+                let dist_tv = ExponentialTV::new(|_| 1.0, unit);
+                let sample_tv = dist_tv.sample_at_t0(&mut rng).as_secs_float();
+                assert!(sample_tv >= 0.0, "ExponentialTV sample {} should be >= 0 for unit {:?}", sample_tv, unit);
+            }
         }
     }
 }
