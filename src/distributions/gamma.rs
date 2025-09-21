@@ -33,6 +33,7 @@ use super::{
 /// let sample = dist.sample_at_t0(&mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct GammaErlang {
     /// Scale parameter
     theta   : Float,
@@ -84,6 +85,7 @@ impl Distribution for GammaErlang {
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct GammaErlangTV<Fa, Fb> {
     /// Shape parameter as a function of time
     alpha   : Fa,

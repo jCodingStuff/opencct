@@ -31,6 +31,7 @@ use super::{
 /// let sample = dist.sample_at_t0(&mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct Beta {
     /// Time unit factor
     factor: Float,
@@ -87,6 +88,7 @@ impl Distribution for Beta {
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct BetaTV<Fa, Fb> {
     /// Shape parameter
     alpha: Fa,

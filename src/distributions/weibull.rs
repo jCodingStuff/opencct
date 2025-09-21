@@ -9,15 +9,6 @@ use crate::{
 };
 use super::Distribution;
 
-pub struct Weibull {
-    /// Scale parameter
-    lambda  : Float,
-    /// Shape parameter
-    k       : Float,
-    /// Time unit factor
-    factor  : Float,
-}
-
 /// Weibull distribution.
 ///
 /// # Example
@@ -32,6 +23,16 @@ pub struct Weibull {
 /// let sample = dist.sample_at_t0(&mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
+pub struct Weibull {
+    /// Scale parameter
+    lambda  : Float,
+    /// Shape parameter
+    k       : Float,
+    /// Time unit factor
+    factor  : Float,
+}
+
 impl Weibull {
     /// Create a new [Weibull] distribution with given shape and scale values.
     /// # Arguments
@@ -69,6 +70,7 @@ impl Distribution for Weibull {
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct WeibullTV<Fl, Fk> {
     /// Scale parameter as a function of time
     lambda  : Fl,

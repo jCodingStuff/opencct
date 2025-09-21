@@ -32,6 +32,7 @@ use super::{
 /// let sample = dist.sample_at_t0(&mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct Normal {
     /// The mean (>= 0)
     mu      : Float,
@@ -84,6 +85,7 @@ impl Distribution for Normal {
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct NormalTV<FMu, FSigma> {
     /// The mean as a function of time
     mu      : FMu,

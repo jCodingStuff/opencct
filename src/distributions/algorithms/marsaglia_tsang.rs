@@ -12,6 +12,7 @@ use super::{
 };
 
 /// Marsaglia-Tsang Method struct
+#[derive(Debug, Copy, Clone)]
 pub struct MarsagliaTsang {
     alpha   : Float,
     d       : Float,

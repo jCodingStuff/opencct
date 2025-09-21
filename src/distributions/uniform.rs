@@ -22,6 +22,7 @@ use super::Distribution;
 /// let sample = dist.sample_at_t0(&mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct Uniform {
     /// Minimum value
     min     : Float,
@@ -43,7 +44,7 @@ impl Uniform {
     /// This function panics if `min > max` or if `min` or `max` is not positive
     pub fn new(min: Float, max: Float, unit: TimeUnit) -> Self {
         assert!(min <= max && min >= 0.0, "Invalid range [{min}, {max}]");
-        Self { min, max, factor: unit.factor()}
+        Self { min, max, factor: unit.factor() }
     }
 }
 
@@ -67,6 +68,7 @@ impl Distribution for Uniform {
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct UniformTV<FMin, FMax> {
     /// Minimum value as a function of time
     min     : FMin,

@@ -23,6 +23,7 @@ use super::Distribution;
 /// let sample = dist.sample_at_t0(&mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct Triangular {
     /// Lower limit
     a       : Float,
@@ -84,6 +85,7 @@ impl Distribution for Triangular {
 /// let sample = dist.sample(Duration::from_hours(2), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct TriangularTV<Fa, Fb, Fc> {
     /// Lower limit as a function of time
     a       : Fa,

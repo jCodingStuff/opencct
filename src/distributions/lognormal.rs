@@ -31,6 +31,7 @@ use super::{
 /// let sample = dist.sample_at_t0(&mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct LogNormal {
     /// Logarithm of location
     mu      : Float,
@@ -82,6 +83,7 @@ impl Distribution for LogNormal {
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct LogNormalTV<FMu, FSigma> {
     /// The logarithm of location function of time
     mu      : FMu,

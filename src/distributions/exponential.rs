@@ -22,6 +22,7 @@ use super::Distribution;
 /// let sample = dist.sample_at_t0(&mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct Exponential {
     /// The rate parameter (> 0)
     lambda  : Float,
@@ -64,6 +65,7 @@ impl Distribution for Exponential {
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct ExponentialTV<F> {
     /// Rate parameter as a function of time
     lambda   : F,

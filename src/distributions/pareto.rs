@@ -23,6 +23,7 @@ use super::Distribution;
 /// let sample = dist.sample_at_t0(&mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct Pareto {
     /// Scale parameter
     xm      : Float,
@@ -69,6 +70,7 @@ impl Distribution for Pareto {
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
+#[derive(Debug, Copy, Clone)]
 pub struct ParetoTV<Fx, Fa> {
     /// Scale parameter
     xm      : Fx,
