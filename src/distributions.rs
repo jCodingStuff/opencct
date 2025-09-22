@@ -22,6 +22,27 @@ pub trait Distribution {
     fn sample_at_t0(&self, rng: &mut dyn RngCore) -> Duration {
         self.sample(Duration::ZERO, rng)
     }
+
+    /// Sample `n` values from the distribution at a given time.
+    /// # Arguments
+    /// * `n` - Amount of values
+    /// * `at` - [Duration] since the start of the simulation.
+    /// * `rng` - Random number generator
+    /// # Returns
+    /// * A vector of [Duration] - Sampled values from the distribution.
+    fn sample_n(&self, n: usize, at: Duration, rng: &mut dyn RngCore) -> Vec<Duration> {
+        (0..n).map(|_| self.sample(at, rng)).collect()
+    }
+
+    /// Sample `n` values from the distribution at time 0.
+    /// # Arguments
+    /// * `n` - Amount of values
+    /// * `rng` - Random number generator
+    /// # Returns
+    /// * A vector of [Duration] - Sampled values from the distribution.
+    fn sample_n_at_t0(&self, n: usize, rng: &mut dyn RngCore) -> Vec<Duration> {
+        self.sample_n(n, Duration::ZERO, rng)
+    }
 }
 
 pub mod algorithms;

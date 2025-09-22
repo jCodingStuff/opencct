@@ -6,6 +6,7 @@ use rand::{Rng, RngCore};
 use crate::{
     time::{DurationExtension, TimeUnit},
     Float,
+    math::gamma,
 };
 use super::Distribution;
 
@@ -46,6 +47,14 @@ impl Weibull {
     pub fn new(lambda: Float, k: Float, unit: TimeUnit) -> Self {
         assert!(lambda > 0.0 && k > 0.0, "Invalid paramters: [lambda: {lambda}, k: {k}]");
         Self { lambda, k, factor: unit.factor() }
+    }
+
+    /// Get the theoretical mean of the distribution
+    pub fn mean(&self) -> Float { self.lambda * gamma(1.0 + 1.0 / self.k) }
+
+    /// Get the theoretical variance of the distribution
+    pub fn variance(&self) -> Float {
+        self.lambda.powi(2) * (gamma(1.0 + 2.0/self.k) - gamma(1.0 + 1.0/self.k).powi(2))
     }
 }
 
@@ -97,6 +106,25 @@ where
     pub fn new(lambda: Fl, k: Fk, unit: TimeUnit) -> Self {
         Self { lambda, k, factor: unit.factor() }
     }
+
+    /// Get the parameters (lambda, k) of the distribution at a given point in time
+    fn get_parameters_at(&self, at: Duration) -> (Float, Float) {
+        let (lambda, k) = ((self.lambda)(at), (self.k)(at));
+        debug_assert!(lambda > 0.0 && k > 0.0, "Invalid lambda {lambda} or k {k} bound at {at:?}");
+        (lambda, k)
+    }
+
+    /// Get the theoretical mean of the distribution at a given time point
+    pub fn mean_at(&self, at: Duration) -> Float {
+        let (lambda, k) = self.get_parameters_at(at);
+        lambda * gamma(1.0 + 1.0 / k)
+    }
+
+    /// Get the theoretical variance of the distribution at a given time point
+    pub fn variance_at(&self, at: Duration) -> Float {
+        let (lambda, k) = self.get_parameters_at(at);
+        lambda.powi(2) * (gamma(1.0 + 2.0/k) - gamma(1.0 + 1.0/k).powi(2))
+    }
 }
 
 impl<Fl, Fk> Distribution for WeibullTV<Fl, Fk>
@@ -109,8 +137,7 @@ where
     /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
     /// **This is NOT checked in release mode!**
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
-        let (lambda, k) = ((self.lambda)(at), (self.k)(at));
-        debug_assert!(lambda > 0.0 && k > 0.0, "Invalid lambda {lambda} or k {k} bound at {at:?}");
+        let (lambda, k) = self.get_parameters_at(at);
         let raw = lambda * (-rng.random::<Float>().ln()).powf(1.0 / k);
         Duration::from_secs_float(raw * self.factor)
     }
@@ -120,7 +147,6 @@ where
 mod tests {
     use super::*;
     use rand::{rngs::StdRng, SeedableRng};
-    use crate::math::gamma;
     use crate::test_utils::{assert_close, BasicStatistics};
 
     mod weibull {
@@ -148,12 +174,9 @@ mod tests {
                 .collect();
 
             let stats = BasicStatistics::compute(&samples);
-            let expected_mean = lambda * gamma(1.0 + 1.0 / k);
-            let expected_var =
-                lambda.powi(2) * (gamma(1.0 + 2.0 / k) - gamma(1.0 + 1.0 / k).powi(2));
 
-            assert_close(stats.mean(), expected_mean, 0.05, "Weibull mean");
-            assert_close(stats.variance(), expected_var, 0.10, "Weibull variance");
+            assert_close(stats.mean(), dist.mean(), 0.05, "Weibull mean");
+            assert_close(stats.variance(), dist.variance(), 0.10, "Weibull variance");
         }
 
         #[test]
@@ -195,12 +218,9 @@ mod tests {
                 .collect();
 
             let stats = BasicStatistics::compute(&samples);
-            let expected_mean = lambda * gamma(1.0 + 1.0 / k);
-            let expected_var =
-                lambda.powi(2) * (gamma(1.0 + 2.0 / k) - gamma(1.0 + 1.0 / k).powi(2));
 
-            assert_close(stats.mean(), expected_mean, 0.05, "WeibullTV mean");
-            assert_close(stats.variance(), expected_var, 0.10, "WeibullTV variance");
+            assert_close(stats.mean(), dist.mean_at(t), 0.05, "WeibullTV mean");
+            assert_close(stats.variance(), dist.variance_at(t), 0.10, "WeibullTV variance");
         }
     }
 }

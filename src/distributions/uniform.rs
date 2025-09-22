@@ -28,6 +28,8 @@ pub struct Uniform {
     min     : Float,
     /// Maximum value
     max     : Float,
+    /// Range
+    range   : Float,
     /// Time unit factor
     factor  : Float,
 }
@@ -44,8 +46,14 @@ impl Uniform {
     /// This function panics if `min > max` or if `min` or `max` is not positive
     pub fn new(min: Float, max: Float, unit: TimeUnit) -> Self {
         assert!(min <= max && min >= 0.0, "Invalid range [{min}, {max}]");
-        Self { min, max, factor: unit.factor() }
+        Self { min, max, range: max - min, factor: unit.factor() }
     }
+
+    /// Get the theoretical mean of the distribution
+    pub fn mean(&self) -> Float { 0.5 * (self.min + self.max) }
+
+    /// Get the theoretical variance of the distribution
+    pub fn variance(&self) -> Float { self.range * self.range / 12.0 }
 }
 
 impl Distribution for Uniform {
@@ -95,6 +103,25 @@ where
     pub fn new(min: FMin, max: FMax, unit: TimeUnit) -> Self {
         Self { min, max, factor: unit.factor() }
     }
+
+    /// Get the bounds (min, max) of the distribution at a given point in time
+    fn get_bounds_at(&self, at: Duration) -> (Float, Float) {
+        let (min, max) = ((self.min)(at), (self.max)(at));
+        debug_assert!(min <= max && min >= 0.0, "Invalid bound at {at:?}: [{min}, {max}]");
+        (min, max)
+    }
+
+    /// Get the theoretical mean of the distribution at a given time point
+    pub fn mean_at(&self, at: Duration) -> Float {
+        let (min, max) = self.get_bounds_at(at);
+        0.5 * (min + max)
+    }
+
+    /// Get the theoretical variance of the distribution at a given time point
+    pub fn variance_at(&self, at: Duration) -> Float {
+        let (min, max) = self.get_bounds_at(at);
+        (max - min) * (max - min) / 12.0
+    }
 }
 
 impl<FMin, FMax> Distribution for UniformTV<FMin, FMax>
@@ -107,9 +134,7 @@ where
     /// In debug, this function will panic if at the requested time the lower bound is higher than the upper one
     /// or if any of the bounds <= 0. **This is NOT checked in release mode!**
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
-        let min = (self.min)(at);
-        let max = (self.max)(at);
-        debug_assert!(min <= max && min >= 0.0, "Invalid bound at {at:?}: [{min}, {max}]");
+        let (min, max) = self.get_bounds_at(at);
         let raw = min + (max - min) * rng.random::<Float>();
         Duration::from_secs_float(raw * self.factor)
     }
@@ -200,11 +225,41 @@ mod tests {
                 .collect();
 
             let stats = BasicStatistics::compute(&samples);
-            let expected_mean = (low + high) / 2.0;
-            let expected_var = ((high - low).powi(2)) / 12.0;
 
-            assert_close(stats.mean(), expected_mean, 0.01, "Uniform mean");
-            assert_close(stats.variance(), expected_var, 0.02, "Uniform variance");
+            assert_close(stats.mean(), dist.mean(), 0.01, "Uniform mean");
+            assert_close(stats.variance(), dist.variance(), 0.02, "Uniform variance");
+        }
+
+        #[test]
+        #[ignore]
+        fn mean_and_variance_with_sample_n() {
+            const N_SAMPLES: usize = 100_000;
+            let low = 1.0;
+            let high = 5.0;
+            let dist = Uniform::new(low, high, TimeUnit::Seconds);
+            let mut rng = StdRng::seed_from_u64(123);
+
+            // Use the sample_n_at_t0 method
+            let samples: Vec<Float> = dist
+                .sample_n_at_t0(N_SAMPLES, &mut rng)
+                .into_iter()
+                .map(|d| d.as_secs_float())
+                .collect();
+
+            let stats = BasicStatistics::compute(&samples);
+
+            assert_close(
+                stats.mean(),
+                dist.mean(),
+                0.01,
+                "Uniform mean from sample_n",
+            );
+            assert_close(
+                stats.variance(),
+                dist.variance(),
+                0.02,
+                "Uniform variance from sample_n",
+            );
         }
     }
 
@@ -315,11 +370,19 @@ mod tests {
                 .collect();
 
             let stats = BasicStatistics::compute(&samples);
-            let expected_mean = (low + high) / 2.0;
-            let expected_var = ((high - low).powi(2)) / 12.0;
 
-            assert_close(stats.mean(), expected_mean, 0.01, "UniformTV mean");
-            assert_close(stats.variance(), expected_var, 0.02, "UniformTV variance");
+            assert_close(
+                stats.mean(),
+                dist.mean_at(t),
+                0.01,
+                "UniformTV mean",
+            );
+            assert_close(
+                stats.variance(),
+                dist.variance_at(t),
+                0.02,
+                "UniformTV variance",
+            );
         }
     }
 }

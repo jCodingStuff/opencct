@@ -52,6 +52,18 @@ impl Triangular {
         assert!(a >= 0.0 && c >= a && b >= c && b > a, "Invalid parameters [a: {a}, b: {b}, c: {c}]");
         Self { a, b, c, fc: (c-a)/(b-a), factor: unit.factor() }
     }
+
+    /// Get the theoretical mean of the distribution
+    pub fn mean(&self) -> Float { (self.a + self.b + self.c) / 3.0 }
+
+    /// Get the theoretical variance of the distribution
+    pub fn variance(&self) -> Float {
+        (
+            self.a.powi(2) + self.b.powi(2) + self.c.powi(2)
+            - self.a * self.b - self.a * self.c - self.b * self.c
+        )
+        / 18.0
+    }
 }
 
 impl Distribution for Triangular {
@@ -116,6 +128,25 @@ where
     pub fn new(a: Fa, b: Fb, c: Fc, unit: TimeUnit) -> Self {
         Self { a, b, c, factor: unit.factor() }
     }
+
+    /// Get the parameters (a, b, c) of the distribution at a given point in time
+    fn get_parameters_at(&self, at: Duration) -> (Float, Float, Float) {
+        let (a, b, c) = ((self.a)(at), (self.b)(at), (self.c)(at));
+        debug_assert!(a >= 0.0 && c >= a && b >= c && b > a, "At t:{at:?} found invalid parameters [a: {a}, b: {b}, c: {c}]");
+        (a, b, c)
+    }
+
+    /// Get the theoretical mean of the distribution at a given time point
+    pub fn mean_at(&self, at: Duration) -> Float {
+        let (a, b, c) = self.get_parameters_at(at);
+        (a + b + c) / 3.0
+    }
+
+    /// Get the theoretical variance of the distribution at a given time point
+    pub fn variance_at(&self, at: Duration) -> Float {
+        let (a, b, c) = self.get_parameters_at(at);
+        (a.powi(2) + b.powi(2) + c.powi(2) - a * b - a * c - b * c) / 18.0
+    }
 }
 
 impl<Fa, Fb, Fc> Distribution for TriangularTV<Fa, Fb, Fc>
@@ -129,8 +160,7 @@ where
     /// In debug, this function will panic if at the requested time `a < 0` or `c < a` or `b < c` or `b < a`
     /// **This is NOT checked in release mode!**
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
-        let (a, b, c) = ((self.a)(at), (self.b)(at), (self.c)(at));
-        debug_assert!(a >= 0.0 && c >= a && b >= c && b > a, "At t:{at:?} found invalid parameters [a: {a}, b: {b}, c: {c}]");
+        let (a, b, c) = self.get_parameters_at(at);
         let u = rng.random::<Float>();
         let raw = if u < (c-a)/(b-a) {
             a + (u*(b-a)*(c-a)).sqrt()
@@ -201,11 +231,9 @@ mod tests {
                 .collect();
 
             let stats = BasicStatistics::compute(&samples);
-            let theoretical_mean = (a + b + c) / 3.0;
-            let theoretical_var = (a * a + b * b + c * c - a * b - a * c - b * c) / 18.0;
 
-            assert_close(stats.mean(), theoretical_mean, 0.02, "Triangular mean");
-            assert_close(stats.variance(), theoretical_var, 0.05, "Triangular variance");
+            assert_close(stats.mean(), dist.mean(), 0.02, "Triangular mean");
+            assert_close(stats.variance(), dist.variance(), 0.05, "Triangular variance");
         }
     }
 
@@ -232,18 +260,17 @@ mod tests {
             let b = 5.0;
             let c = 3.0;
 
+            let t = Duration::from_secs(5);
             let dist = TriangularTV::new(|_| a, |_| b, |_| c, TimeUnit::Seconds);
             let mut rng = StdRng::seed_from_u64(123);
             let samples: Vec<Float> = (0..N_SAMPLES)
-                .map(|_| dist.sample_at_t0(&mut rng).as_secs_float())
+                .map(|_| dist.sample(t, &mut rng).as_secs_float())
                 .collect();
 
             let stats = BasicStatistics::compute(&samples);
-            let theoretical_mean = (a + b + c) / 3.0;
-            let theoretical_var = (a * a + b * b + c * c - a * b - a * c - b * c) / 18.0;
 
-            assert_close(stats.mean(), theoretical_mean, 0.02, "TriangularTV mean");
-            assert_close(stats.variance(), theoretical_var, 0.05, "TriangularTV variance");
+            assert_close(stats.mean(), dist.mean_at(t), 0.02, "TriangularTV mean");
+            assert_close(stats.variance(), dist.variance_at(t), 0.05, "TriangularTV variance");
         }
     }
 }
