@@ -47,6 +47,20 @@ impl Pareto {
         assert!(xm > 0.0 && alpha > 0.0, "Invalid xm {xm} or alpha {alpha}");
         Self { xm, alpha, factor: unit.factor() }
     }
+
+    /// Get the theoretical mean of the distribution
+    pub fn mean(&self) -> Float {
+        if self.alpha <= 1.0 { Float::INFINITY } else { self.alpha * self.xm / (self.alpha - 1.0) }
+    }
+
+    /// Get the theoretical variance of the distribution
+    pub fn variance(&self) -> Float {
+        if self.alpha <= 2.0 {
+            Float::INFINITY
+        } else {
+            self.xm.powi(2) * self.alpha / ((self.alpha - 1.0).powi(2) * (self.alpha - 2.0))
+        }
+    }
 }
 
 impl Distribution for Pareto {
@@ -97,6 +111,29 @@ where
     pub fn new(xm: Fx, alpha: Fa, unit: TimeUnit) -> Self {
         Self { xm, alpha, factor: unit.factor() }
     }
+
+    /// Get the parameters (xm, alpha) of the distribution at a given point in time
+    fn get_parameters_at(&self, at: Duration) -> (Float, Float) {
+        let (xm, alpha) = ((self.xm)(at), (self.alpha)(at));
+        debug_assert!(xm > 0.0 && alpha > 0.0, "Invalid xm {xm} or alpha {alpha} bound at {at:?}");
+        (xm, alpha)
+    }
+
+    /// Get the theoretical mean of the distribution at a given time point
+    pub fn mean_at(&self, at: Duration) -> Float {
+        let (xm, alpha) = self.get_parameters_at(at);
+        if alpha <= 1.0 { Float::INFINITY } else { alpha * xm / (alpha - 1.0) }
+    }
+
+    /// Get the theoretical variance of the distribution at a given time point
+    pub fn variance_at(&self, at: Duration) -> Float {
+        let (xm, alpha) = self.get_parameters_at(at);
+        if alpha <= 2.0 {
+            Float::INFINITY
+        } else {
+            xm.powi(2) * alpha / ((alpha - 1.0).powi(2) * (alpha - 2.0))
+        }
+    }
 }
 
 impl<Fx, Fa> Distribution for ParetoTV<Fx, Fa>
@@ -109,8 +146,7 @@ where
     /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
     /// **This is NOT checked in release mode!**
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
-        let (xm, alpha) = ((self.xm)(at), (self.alpha)(at));
-        debug_assert!(xm > 0.0 && alpha > 0.0, "Invalid xm {xm} or alpha {alpha} bound at {at:?}");
+        let (xm, alpha) = self.get_parameters_at(at);
         let raw = xm / rng.random::<Float>().powf(1.0 / alpha);
         Duration::from_secs_float(raw * self.factor)
     }
@@ -154,18 +190,16 @@ mod tests {
             let alpha = 3.0;
             let dist = Pareto::new(xm, alpha, TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
-            let n = 500_000;
-            let samples: Vec<Float> = (0..n)
-                .map(|_| dist.sample_at_t0(&mut rng).as_secs_float())
+            const N: usize = 500_000;
+            let samples: Vec<_> = dist.sample_n_at_t0(N, &mut rng)
+                .iter()
+                .map(|d| d.as_secs_float())
                 .collect();
 
             let stats = BasicStatistics::compute(&samples);
-            let expected_mean = alpha * xm / (alpha - 1.0);
-            let expected_var =
-                (xm * xm * alpha) / ((alpha - 1.0).powi(2) * (alpha - 2.0));
 
-            assert_close(stats.mean(), expected_mean, 0.05, "Pareto mean");
-            assert_close(stats.variance(), expected_var, 0.10, "Pareto variance");
+            assert_close(stats.mean(), dist.mean(), 0.05, "Pareto mean");
+            assert_close(stats.variance(), dist.variance(), 0.10, "Pareto variance");
         }
     }
 
@@ -200,31 +234,27 @@ mod tests {
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();
-            let n = 500_000;
+            const N: usize = 500_000;
 
             // test at multiple time points
-            for &secs in &[0_u64, 5, 10, 20] {
+            for secs in [0_u64, 5, 10, 20] {
                 let t = Duration::from_secs(secs);
-                let xm = 1.0 + t.as_secs_f64() * 0.2;
-                let alpha = 3.0;
-
-                let samples: Vec<Float> =
-                    (0..n).map(|_| dist.sample(t, &mut rng).as_secs_float()).collect();
+                let samples: Vec<_> = dist.sample_n(N, t, &mut rng)
+                    .iter()
+                    .map(|d| d.as_secs_float())
+                    .collect();
 
                 let stats = BasicStatistics::compute(&samples);
-                let expected_mean = alpha * xm / (alpha - 1.0);
-                let expected_var =
-                    (xm * xm * alpha) / ((alpha - 1.0).powi(2) * (alpha - 2.0));
 
                 assert_close(
                     stats.mean(),
-                    expected_mean,
+                    dist.mean_at(t),
                     0.05,
                     &format!("ParetoTV mean at t={secs}"),
                 );
                 assert_close(
                     stats.variance(),
-                    expected_var,
+                    dist.variance_at(t),
                     0.10,
                     &format!("ParetoTV variance at t={secs}"),
                 );

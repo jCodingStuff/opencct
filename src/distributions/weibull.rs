@@ -169,8 +169,9 @@ mod tests {
             let dist = Weibull::new(lambda, k, TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
 
-            let samples: Vec<Float> = (0..N_SAMPLES)
-                .map(|_| dist.sample_at_t0(&mut rng).as_secs_float())
+            let samples: Vec<_> = dist.sample_n_at_t0(N_SAMPLES, &mut rng)
+                .iter()
+                .map(|d| d.as_secs_float())
                 .collect();
 
             let stats = BasicStatistics::compute(&samples);
@@ -213,8 +214,9 @@ mod tests {
             let mut rng = StdRng::from_os_rng();
 
             let t = Duration::from_secs(5);
-            let samples: Vec<Float> = (0..N_SAMPLES)
-                .map(|_| dist.sample(t, &mut rng).as_secs_float())
+            let samples: Vec<_> = dist.sample_n(N_SAMPLES, t, &mut rng)
+                .iter()
+                .map(|d| d.as_secs_float())
                 .collect();
 
             let stats = BasicStatistics::compute(&samples);

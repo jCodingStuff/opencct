@@ -28,8 +28,6 @@ pub struct Uniform {
     min     : Float,
     /// Maximum value
     max     : Float,
-    /// Range
-    range   : Float,
     /// Time unit factor
     factor  : Float,
 }
@@ -46,14 +44,14 @@ impl Uniform {
     /// This function panics if `min > max` or if `min` or `max` is not positive
     pub fn new(min: Float, max: Float, unit: TimeUnit) -> Self {
         assert!(min <= max && min >= 0.0, "Invalid range [{min}, {max}]");
-        Self { min, max, range: max - min, factor: unit.factor() }
+        Self { min, max, factor: unit.factor() }
     }
 
     /// Get the theoretical mean of the distribution
     pub fn mean(&self) -> Float { 0.5 * (self.min + self.max) }
 
     /// Get the theoretical variance of the distribution
-    pub fn variance(&self) -> Float { self.range * self.range / 12.0 }
+    pub fn variance(&self) -> Float { (self.max - self.min).powi(2) / 12.0 }
 }
 
 impl Distribution for Uniform {
@@ -220,46 +218,15 @@ mod tests {
             let mut rng = StdRng::seed_from_u64(42);
             let dist = Uniform::new(low, high, TimeUnit::Seconds);
 
-            let samples: Vec<Float> = (0..N_SAMPLES)
-                .map(|_| dist.sample_at_t0(&mut rng).as_secs_float())
+            let samples: Vec<_> = dist.sample_n_at_t0(N_SAMPLES, &mut rng)
+                .iter()
+                .map(|d| d.as_secs_float())
                 .collect();
 
             let stats = BasicStatistics::compute(&samples);
 
             assert_close(stats.mean(), dist.mean(), 0.01, "Uniform mean");
             assert_close(stats.variance(), dist.variance(), 0.02, "Uniform variance");
-        }
-
-        #[test]
-        #[ignore]
-        fn mean_and_variance_with_sample_n() {
-            const N_SAMPLES: usize = 100_000;
-            let low = 1.0;
-            let high = 5.0;
-            let dist = Uniform::new(low, high, TimeUnit::Seconds);
-            let mut rng = StdRng::seed_from_u64(123);
-
-            // Use the sample_n_at_t0 method
-            let samples: Vec<Float> = dist
-                .sample_n_at_t0(N_SAMPLES, &mut rng)
-                .into_iter()
-                .map(|d| d.as_secs_float())
-                .collect();
-
-            let stats = BasicStatistics::compute(&samples);
-
-            assert_close(
-                stats.mean(),
-                dist.mean(),
-                0.01,
-                "Uniform mean from sample_n",
-            );
-            assert_close(
-                stats.variance(),
-                dist.variance(),
-                0.02,
-                "Uniform variance from sample_n",
-            );
         }
     }
 
@@ -365,7 +332,8 @@ mod tests {
             let mut rng = StdRng::seed_from_u64(42);
 
             let t = Duration::from_secs(5);
-            let samples: Vec<Float> = (0..N_SAMPLES)
+            let samples: Vec<_> = dist.sample_n(N_SAMPLES, t, &mut rng)
+                .iter()
                 .map(|_| dist.sample(t, &mut rng).as_secs_float())
                 .collect();
 

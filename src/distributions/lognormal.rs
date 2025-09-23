@@ -55,6 +55,14 @@ impl LogNormal {
         assert!(sigma > 0.0, "Sigma ({sigma}) must be > 0");
         Self { mu, sigma, factor: unit.factor() }
     }
+
+    /// Get the theoretical mean of the distribution
+    pub fn mean(&self) -> Float { (self.mu + 0.5 * self.sigma.powi(2)).exp() }
+
+    /// Get the theoretical variance of the distribution
+    pub fn variance(&self) -> Float {
+        self.sigma.powi(2).exp_m1() * (2.0 * self.mu + self.sigma.powi(2)).exp()
+    }
 }
 
 impl Distribution for LogNormal {
@@ -110,6 +118,25 @@ where
     pub fn new(mu: FMu, sigma: FSigma, unit: TimeUnit) -> Self {
         Self { mu, sigma, factor: unit.factor() }
     }
+
+    /// Get the parameters (mu, sigma) of the distribution at a given point in time
+    fn get_parameters_at(&self, at: Duration) -> (Float, Float) {
+        let (mu, sigma) = ((self.mu)(at), (self.sigma)(at));
+        debug_assert!(sigma > 0.0, "Invalid sigma at {at:?}: {sigma}");
+        (mu, sigma)
+    }
+
+    /// Get the theoretical mean of the distribution at a given time point
+    pub fn mean_at(&self, at: Duration) -> Float {
+        let (mu, sigma) = self.get_parameters_at(at);
+        (mu + 0.5 * sigma.powi(2)).exp()
+    }
+
+    /// Get the theoretical variance of the distribution at a given time point
+    pub fn variance_at(&self, at: Duration) -> Float {
+        let (mu, sigma) = self.get_parameters_at(at);
+        sigma.powi(2).exp_m1() * (2.0 * mu + sigma.powi(2)).exp()
+    }
 }
 
 impl<FMu, FSigma> Distribution for LogNormalTV<FMu, FSigma>
@@ -122,8 +149,7 @@ where
     /// In debug, this function will panic if at the requested time the logarithm of scale <= 0
     /// **This is NOT checked in release mode!**
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
-        let (mu, sigma) = ((self.mu)(at), (self.sigma)(at));
-        debug_assert!(sigma > 0.0, "Invalid sigma at {at:?}: {sigma}");
+        let (mu, sigma) = self.get_parameters_at(at);
         let x = scaled_zignor_method(rng, mu, sigma);
         Duration::from_secs_float(x.exp() * self.factor)
     }
@@ -168,16 +194,15 @@ mod tests {
             let dist = LogNormal::new(mu, sigma, TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
 
-            let samples: Vec<Float> = (0..N_SAMPLES)
-                .map(|_| dist.sample_at_t0(&mut rng).as_secs_float())
+            let samples: Vec<_> = dist.sample_n_at_t0(N_SAMPLES, &mut rng)
+                .iter()
+                .map(|d| d.as_secs_float())
                 .collect();
 
             let stats = BasicStatistics::compute(&samples);
-            let expected_mean = (mu + 0.5 * sigma.powi(2)).exp();
-            let expected_var = ((sigma.powi(2)).exp() - 1.0) * (2.0 * mu + sigma.powi(2)).exp();
 
-            assert_close(stats.mean(), expected_mean, 0.05, "LogNormal mean"); // 5% tolerance
-            assert_close(stats.variance(), expected_var, 0.10, "LogNormal variance"); // 10% tolerance
+            assert_close(stats.mean(), dist.mean(), 0.05, "LogNormal mean"); // 5% tolerance
+            assert_close(stats.variance(), dist.variance(), 0.10, "LogNormal variance"); // 10% tolerance
         }
     }
 
@@ -209,28 +234,24 @@ mod tests {
             let dist = LogNormalTV::new(mu_fn, sigma_fn, TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
 
-            for &t_sec in &[0, 4, 8] {
+            for t_sec in [0, 4, 8] {
                 let t = Duration::from_secs(t_sec);
-                let mu = mu_fn(t);
-                let sigma = sigma_fn(t);
-
-                let samples: Vec<Float> = (0..N_SAMPLES)
-                    .map(|_| dist.sample(t, &mut rng).as_secs_float())
+                let samples: Vec<Float> = dist.sample_n(N_SAMPLES, t, &mut rng)
+                    .iter()
+                    .map(|d| d.as_secs_float())
                     .collect();
 
                 let stats = BasicStatistics::compute(&samples);
-                let expected_mean = (mu + 0.5 * sigma.powi(2)).exp();
-                let expected_var = ((sigma.powi(2)).exp() - 1.0) * (2.0 * mu + sigma.powi(2)).exp();
 
                 assert_close(
                     stats.mean(),
-                    expected_mean,
+                    dist.mean_at(t),
                     0.05,
                     &format!("LogNormalTV mean at t={t_sec}"),
                 );
                 assert_close(
                     stats.variance(),
-                    expected_var,
+                    dist.variance_at(t),
                     0.10,
                     &format!("LogNormalTV variance at t={t_sec}"),
                 );
