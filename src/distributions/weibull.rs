@@ -17,7 +17,7 @@ use super::Distribution;
 /// use std::time::Duration;
 /// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, Weibull};
-/// use opencct::time::TimeUnit;
+/// use opencct::TimeUnit;
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = Weibull::new(1.0, 3.0, TimeUnit::Seconds);
@@ -53,17 +53,17 @@ impl Weibull {
 impl Distribution for Weibull {
     fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
         let raw = self.lambda * (-rng.random::<Float>().ln()).powf(1.0 / self.k);
-        self.unit.to_duration(raw)
+        self.unit.to(raw)
     }
 
     fn mean(&self, _: Duration) -> Duration {
         let raw = self.lambda * gamma(1.0 + 1.0 / self.k);
-        self.unit.to_duration(raw)
+        self.unit.to(raw)
     }
 
     fn variance(&self, _: Duration) -> Duration {
         let raw = self.lambda.powi(2) * (gamma(1.0 + 2.0/self.k) - gamma(1.0 + 1.0/self.k).powi(2));
-        self.unit.to_duration(raw)
+        self.unit.to2(raw)
     }
 }
 
@@ -74,12 +74,12 @@ impl Distribution for Weibull {
 /// use std::time::Duration;
 /// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, WeibullTV};
-/// use opencct::time::TimeUnit;
+/// use opencct::TimeUnit;
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = WeibullTV::new(
-///     |t| 1.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
-///     |t| 3.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
+///     |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     |t| 3.0 + TimeUnit::Seconds.from(t) * 0.1,
 ///     TimeUnit::Seconds,
 /// );
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
@@ -133,7 +133,7 @@ where
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (lambda, k) = self.get_parameters_at(at);
         let raw = lambda * (-rng.random::<Float>().ln()).powf(1.0 / k);
-        self.unit.to_duration(raw)
+        self.unit.to(raw)
     }
 
     /// See [Distribution::mean]
@@ -143,7 +143,7 @@ where
     fn mean(&self, at: Duration) -> Duration {
         let (lambda, k) = self.get_parameters_at(at);
         let raw = lambda * gamma(1.0 + 1.0 / k);
-        self.unit.to_duration(raw)
+        self.unit.to(raw)
     }
 
     /// See [Distribution::variance]
@@ -153,7 +153,7 @@ where
     fn variance(&self, at: Duration) -> Duration {
         let (lambda, k) = self.get_parameters_at(at);
         let raw = lambda.powi(2) * (gamma(1.0 + 2.0/k) - gamma(1.0 + 1.0/k).powi(2));
-        self.unit.to_duration(raw)
+        self.unit.to2(raw)
     }
 }
 
@@ -222,8 +222,8 @@ mod tests {
             const N_SAMPLES: usize = 500_000;
 
             let dist = WeibullTV::new(
-                |t| 0.5 * TimeUnit::Seconds.from_duration(t) + 0.1,
-                |t| 0.2 * TimeUnit::Seconds.from_duration(t) + 1.0,
+                |t| 0.5 * TimeUnit::Seconds.from(t) + 0.1,
+                |t| 0.2 * TimeUnit::Seconds.from(t) + 1.0,
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();

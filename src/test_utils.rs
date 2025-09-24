@@ -19,7 +19,7 @@ impl ToFloat for Float {
 }
 
 impl ToFloat for Duration {
-    fn to_float(&self) -> Float { TimeUnit::Seconds.from_duration(*self) }
+    fn to_float(&self) -> Float { TimeUnit::Seconds.from(*self) }
 }
 
 /// A simple container for basic population statistics computed from a slice of samples.

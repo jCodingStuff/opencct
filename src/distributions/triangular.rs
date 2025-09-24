@@ -16,7 +16,7 @@ use super::Distribution;
 /// use std::time::Duration;
 /// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, Triangular};
-/// use opencct::time::TimeUnit;
+/// use opencct::TimeUnit;
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = Triangular::new(1.0, 4.0, 1.5, TimeUnit::Hours);
@@ -62,12 +62,12 @@ impl Distribution for Triangular {
         } else {
             self.b - ((1.0-u)*(self.b-self.a)*(self.b-self.c)).sqrt()
         };
-        self.unit.to_duration(raw)
+        self.unit.to(raw)
     }
 
     fn mean(&self, _: Duration) -> Duration {
         let raw = (self.a + self.b + self.c) / 3.0;
-        self.unit.to_duration(raw)
+        self.unit.to(raw)
     }
 
     fn variance(&self, _: Duration) -> Duration {
@@ -75,7 +75,7 @@ impl Distribution for Triangular {
             self.a.powi(2) + self.b.powi(2) + self.c.powi(2)
             - self.a * self.b - self.a * self.c - self.b * self.c
         ) / 18.0;
-        self.unit.to_duration(raw)
+        self.unit.to2(raw)
     }
 }
 
@@ -86,16 +86,16 @@ impl Distribution for Triangular {
 /// use std::time::Duration;
 /// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, TriangularTV};
-/// use opencct::time::TimeUnit;
+/// use opencct::TimeUnit;
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = TriangularTV::new(
-///     |t| 1.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
-///     |t| 3.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
-///     |t| 2.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
+///     |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     |t| 3.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     |t| 2.0 + TimeUnit::Seconds.from(t) * 0.1,
 ///     TimeUnit::Hours,
 /// );
-/// let sample = dist.sample(Duration::from_hours(2), &mut rng);
+/// let sample = dist.sample(TimeUnit::Hours.to(2.0), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
 #[derive(Debug, Copy, Clone)]
@@ -156,7 +156,7 @@ where
         } else {
             b - ((1.0-u)*(b-a)*(b-c)).sqrt()
         };
-        self.unit.to_duration(raw)
+        self.unit.to(raw)
     }
 
     /// See [Distribution::mean]
@@ -166,7 +166,7 @@ where
     fn mean(&self, at: Duration) -> Duration {
         let (a, b, c) = self.get_parameters_at(at);
         let raw = (a + b + c) / 3.0;
-        self.unit.to_duration(raw)
+        self.unit.to(raw)
     }
 
     /// See [Distribution::variance]
@@ -176,7 +176,7 @@ where
     fn variance(&self, at: Duration) -> Duration {
         let (a, b, c) = self.get_parameters_at(at);
         let raw = (a.powi(2) + b.powi(2) + c.powi(2) - a * b - a * c - b * c) / 18.0;
-        self.unit.to_duration(raw)
+        self.unit.to2(raw)
     }
 }
 
@@ -195,7 +195,7 @@ mod tests {
             let mut rng = StdRng::from_os_rng();
 
             for _ in 0..10 {
-                let v = TimeUnit::Seconds.from_duration(dist.sample_at_t0(&mut rng));
+                let v = TimeUnit::Seconds.from(dist.sample_at_t0(&mut rng));
                 assert!(v.is_finite(), "Sampled value must be finite, got {v}");
                 assert!(v >= 1.0 && v <= 5.0, "Sample {v} out of bounds [1.0, 5.0]");
             }
@@ -253,7 +253,7 @@ mod tests {
             let mut rng = StdRng::from_os_rng();
 
             for _ in 0..10 {
-                let v = TimeUnit::Seconds.from_duration(dist.sample_at_t0(&mut rng));
+                let v = TimeUnit::Seconds.from(dist.sample_at_t0(&mut rng));
                 assert!(v.is_finite(), "Sampled value must be finite, got {v}");
                 assert!(v >= 1.0 && v <= 5.0, "Sample {v} out of bounds [1.0, 5.0]");
             }
@@ -265,9 +265,9 @@ mod tests {
             const N_SAMPLES: usize = 500_000;
 
             let dist = TriangularTV::new(
-                |t| 0.5 * TimeUnit::Seconds.from_duration(t) + 0.5,
-                |t| 0.7 * TimeUnit::Seconds.from_duration(t) + 4.0,
-                |t| 0.65 * TimeUnit::Seconds.from_duration(t) + 0.89,
+                |t| 0.5 * TimeUnit::Seconds.from(t) + 0.5,
+                |t| 0.7 * TimeUnit::Seconds.from(t) + 4.0,
+                |t| 0.65 * TimeUnit::Seconds.from(t) + 0.89,
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();

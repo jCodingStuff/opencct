@@ -35,7 +35,7 @@ impl TimeUnit {
     /// * `value` - The value
     /// # Returns
     /// A new [Duration]
-    pub fn to_duration(&self, value: Float) -> Duration {
+    pub fn to(&self, value: Float) -> Duration {
         #[cfg(feature = "f32")]
         { Duration::from_secs_32(value * self.factor()) }
 
@@ -43,12 +43,25 @@ impl TimeUnit {
         { Duration::from_secs_f64(value * self.factor()) }
     }
 
+    /// Convert a value to a [Duration] squared (the unit squared)
+    /// # Arguments
+    /// * `value` - The value
+    /// # Returns
+    /// A new [Duration]
+    pub fn to2(&self, value: Float) -> Duration {
+        #[cfg(feature = "f32")]
+        { Duration::from_secs_32(value * self.factor().powi(2)) }
+
+        #[cfg(feature = "f64")]
+        { Duration::from_secs_f64(value * self.factor().powi(2)) }
+    }
+
     /// Convert a [Duration] to a [Float] value
     /// # Arguments
     /// * `d` - The [Duration]
     /// # Returns
     /// The value interpreted by the unit as [Float]
-    pub fn from_duration(&self, d: Duration) -> Float {
+    pub fn from(&self, d: Duration) -> Float {
         #[cfg(feature = "f32")]
         { d.as_secs_f32() / self.factor() }
 
@@ -75,14 +88,14 @@ mod tests {
 
     #[test]
     fn test_to_duration_seconds() {
-        let d = TimeUnit::Seconds.to_duration(5.0 as Float);
+        let d = TimeUnit::Seconds.to(5.0 as Float);
         let total: Float = d.as_secs() as Float + (d.subsec_nanos() as Float) * 1e-9;
         assert!((total - 5.0).abs() < 1e-9);
     }
 
     #[test]
     fn test_to_duration_minutes() {
-        let d = TimeUnit::Minutes.to_duration(2.0 as Float);
+        let d = TimeUnit::Minutes.to(2.0 as Float);
         let total: Float = d.as_secs() as Float + (d.subsec_nanos() as Float) * 1e-9;
         assert!((total - 120.0).abs() < 1e-9);
     }
@@ -91,16 +104,16 @@ mod tests {
     fn test_from_duration_roundtrip() {
         let unit = TimeUnit::Hours;
         let value: Float = 3.5;
-        let dur = unit.to_duration(value);
-        let back: Float = unit.from_duration(dur);
+        let dur = unit.to(value);
+        let back: Float = unit.from(dur);
         assert!((back - value).abs() < 1e-6, "expected {value}, got {back}");
     }
 
     #[test]
     fn test_zero_value() {
         let unit = TimeUnit::Millis;
-        let d = unit.to_duration(0.0 as Float);
-        let back: Float = unit.from_duration(d);
+        let d = unit.to(0.0);
+        let back: Float = unit.from(d);
         assert!((back - 0.0).abs() < 1e-9);
     }
 
@@ -108,8 +121,8 @@ mod tests {
     fn test_large_value() {
         let unit = TimeUnit::Days;
         let value: Float = 1000.0; // ~1000 days
-        let d = unit.to_duration(value);
-        let back: Float = unit.from_duration(d);
+        let d = unit.to(value);
+        let back: Float = unit.from(d);
         assert!((back - value).abs() < 1e-6, "large roundtrip failed: {value} vs {back}");
     }
 
@@ -117,8 +130,8 @@ mod tests {
     fn test_fractional_millis() {
         let unit = TimeUnit::Millis;
         let value: Float = 1.5; // 1.5 ms
-        let d = unit.to_duration(value);
-        let back: Float = unit.from_duration(d);
+        let d = unit.to(value);
+        let back: Float = unit.from(d);
         assert!((back - value).abs() < 1e-9, "fractional millis roundtrip failed: {value} vs {back}");
     }
 
@@ -126,8 +139,8 @@ mod tests {
     fn test_fractional_nanos() {
         let unit = TimeUnit::Nanos;
         let value: Float = 2500.0; // 2500 ns = 2.5 μs
-        let d = unit.to_duration(value);
-        let back: Float = unit.from_duration(d);
+        let d = unit.to(value);
+        let back: Float = unit.from(d);
         assert!((back - value).abs() < 1e-9, "fractional nanos roundtrip failed: {value} vs {back}");
     }
 }

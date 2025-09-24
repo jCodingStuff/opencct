@@ -25,7 +25,7 @@ use super::{
 /// use std::time::Duration;
 /// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, Normal};
-/// use opencct::time::TimeUnit;
+/// use opencct::TimeUnit;
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = Normal::new(5.0, 1.0, TimeUnit::Millis);
@@ -61,12 +61,12 @@ impl Normal {
 impl Distribution for Normal {
     fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
         let raw = scaled_zignor_method(rng, self.mu, self.sigma);
-        self.unit.to_duration(raw.max(0.0))
+        self.unit.to(raw.max(0.0))
     }
 
-    fn mean(&self, _: Duration) -> Duration { self.unit.to_duration(self.mu) }
+    fn mean(&self, _: Duration) -> Duration { self.unit.to(self.mu) }
 
-    fn variance(&self, _: Duration) -> Duration { self.unit.to_duration(self.sigma.powi(2)) }
+    fn variance(&self, _: Duration) -> Duration { self.unit.to2(self.sigma.powi(2)) }
 }
 
 /// Normal distribution with time-varying parmeters. Since in the current context,
@@ -82,12 +82,12 @@ impl Distribution for Normal {
 /// use std::time::Duration;
 /// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, NormalTV};
-/// use opencct::time::TimeUnit;
+/// use opencct::TimeUnit;
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = NormalTV::new(
-///     |t| 1.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
-///     |t| 3.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
+///     |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     |t| 3.0 + TimeUnit::Seconds.from(t) * 0.1,
 ///     TimeUnit::Seconds,
 /// );
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
@@ -141,7 +141,7 @@ where
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (mu, sigma) = self.get_parameters_at(at);
         let raw = scaled_zignor_method(rng, mu, sigma);
-        self.unit.to_duration(raw.max(0.0))
+        self.unit.to(raw.max(0.0))
     }
 
     /// See [Distribution::mean]
@@ -149,7 +149,7 @@ where
     /// In debug, this function will panic if at the requested time the standard deviation <= 0
     /// **This is NOT checked in release mode!**
     fn mean(&self, at: Duration) -> Duration {
-        self.unit.to_duration(self.get_parameters_at(at).0)
+        self.unit.to(self.get_parameters_at(at).0)
     }
 
     /// See [Distribution::variance]
@@ -157,7 +157,7 @@ where
     /// In debug, this function will panic if at the requested time the standard deviation <= 0
     /// **This is NOT checked in release mode!**
     fn variance(&self, at: Duration) -> Duration {
-        self.unit.to_duration(self.get_parameters_at(at).1.powi(2))
+        self.unit.to2(self.get_parameters_at(at).1.powi(2))
     }
 }
 
@@ -211,8 +211,8 @@ mod tests {
         #[test]
         fn samples_positive() {
             let dist = NormalTV::new(
-                |t| 0.5 + TimeUnit::Millis.from_duration(t) * 0.01,
-                |t| 2.0 + TimeUnit::Millis.from_duration(t) * 0.05,
+                |t| 0.5 + TimeUnit::Millis.from(t) * 0.01,
+                |t| 2.0 + TimeUnit::Millis.from(t) * 0.05,
                 TimeUnit::Millis,
             );
             let mut rng = StdRng::from_os_rng();
@@ -230,8 +230,8 @@ mod tests {
             const N_SAMPLES: usize = 500_000;
 
             let dist = NormalTV::new(
-                |t| 50.0 + TimeUnit::Millis.from_duration(t) * 0.1,
-                |t| 2.0 + TimeUnit::Millis.from_duration(t) * 0.05,
+                |t| 50.0 + TimeUnit::Millis.from(t) * 0.1,
+                |t| 2.0 + TimeUnit::Millis.from(t) * 0.05,
                 TimeUnit::Millis,
             );
             let mut rng = StdRng::from_os_rng();

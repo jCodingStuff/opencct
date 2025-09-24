@@ -16,7 +16,7 @@ use super::Distribution;
 /// use std::time::Duration;
 /// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, Pareto};
-/// use opencct::time::TimeUnit;
+/// use opencct::TimeUnit;
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = Pareto::new(1.0, 3.0, TimeUnit::Seconds);
@@ -52,12 +52,12 @@ impl Pareto {
 impl Distribution for Pareto {
     fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
         let raw = self.xm / rng.random::<Float>().powf(1.0 / self.alpha);
-        self.unit.to_duration(raw)
+        self.unit.to(raw)
     }
 
     fn mean(&self, _: Duration) -> Duration {
         let raw = if self.alpha <= 1.0 { Float::INFINITY } else { self.alpha * self.xm / (self.alpha - 1.0) };
-        self.unit.to_duration(raw)
+        self.unit.to(raw)
     }
 
     fn variance(&self, _: Duration) -> Duration {
@@ -66,7 +66,7 @@ impl Distribution for Pareto {
         } else {
             self.xm.powi(2) * self.alpha / ((self.alpha - 1.0).powi(2) * (self.alpha - 2.0))
         };
-        self.unit.to_duration(raw)
+        self.unit.to2(raw)
     }
 }
 
@@ -77,12 +77,12 @@ impl Distribution for Pareto {
 /// use std::time::Duration;
 /// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, ParetoTV};
-/// use opencct::time::TimeUnit;
+/// use opencct::TimeUnit;
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = ParetoTV::new(
-///     |t| 1.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
-///     |t| 3.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
+///     |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     |t| 3.0 + TimeUnit::Seconds.from(t) * 0.1,
 ///     TimeUnit::Seconds,
 /// );
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
@@ -136,7 +136,7 @@ where
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (xm, alpha) = self.get_parameters_at(at);
         let raw = xm / rng.random::<Float>().powf(1.0 / alpha);
-        self.unit.to_duration(raw)
+        self.unit.to(raw)
     }
 
     /// See [Distribution::mean]
@@ -146,7 +146,7 @@ where
     fn mean(&self, at: Duration) -> Duration {
         let (xm, alpha) = self.get_parameters_at(at);
         let raw = if alpha <= 1.0 { Float::INFINITY } else { alpha * xm / (alpha - 1.0) };
-        self.unit.to_duration(raw)
+        self.unit.to(raw)
     }
 
     /// See [Distribution::variance]
@@ -160,7 +160,7 @@ where
         } else {
             xm.powi(2) * alpha / ((alpha - 1.0).powi(2) * (alpha - 2.0))
         };
-        self.unit.to_duration(raw)
+        self.unit.to2(raw)
     }
 }
 
@@ -178,7 +178,7 @@ mod tests {
             let dist = Pareto::new(1.0, 3.0, TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
             for _ in 0..100 {
-                let val = TimeUnit::Seconds.from_duration(dist.sample_at_t0(&mut rng));
+                let val = TimeUnit::Seconds.from(dist.sample_at_t0(&mut rng));
                 assert!(val >= 1.0, "Sample {val} should be >= xm");
             }
         }
@@ -202,7 +202,7 @@ mod tests {
             let alpha = 3.0;
             let dist = Pareto::new(xm, alpha, TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
-            const N: usize = 500_000;
+            const N: usize = 1_000_000;
             let samples = dist.sample_n_at_t0(N, &mut rng);
 
             let stats = BasicStatistics::compute(&samples);
@@ -225,7 +225,7 @@ mod tests {
             let mut rng = StdRng::from_os_rng();
             for i in 0..10 {
                 let t = Duration::from_secs(i);
-                let val = TimeUnit::Seconds.from_duration(dist.sample(t, &mut rng));
+                let val = TimeUnit::Seconds.from(dist.sample(t, &mut rng));
                 let expected_xm = 1.0 + i as Float * 0.1;
                 assert!(
                     val >= expected_xm,
@@ -243,7 +243,7 @@ mod tests {
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();
-            const N: usize = 500_000;
+            const N: usize = 1_000_000;
 
             // test at multiple time points
             for secs in [0, 5, 10, 20] {

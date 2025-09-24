@@ -19,5 +19,6 @@ pub mod test_utils;
 pub mod distributions;
 
 pub mod time;
+pub use time::TimeUnit;
 
 pub mod math;

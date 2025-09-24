@@ -24,7 +24,7 @@ use super::{
 /// use std::time::Duration;
 /// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, LogNormal};
-/// use opencct::time::TimeUnit;
+/// use opencct::TimeUnit;
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = LogNormal::new(5.0, 1.0, TimeUnit::Seconds);
@@ -37,8 +37,8 @@ pub struct LogNormal {
     mu      : Float,
     /// Logarithm of scale (> 0)
     sigma   : Float,
-    /// Time unit factor
-    factor  : Float,
+    /// Time unit
+    unit    : TimeUnit,
 }
 
 impl LogNormal {
@@ -53,22 +53,24 @@ impl LogNormal {
     /// This function panics if `sigma <= 0`
     pub fn new(mu: Float, sigma: Float, unit: TimeUnit) -> Self {
         assert!(sigma > 0.0, "Sigma ({sigma}) must be > 0");
-        Self { mu, sigma, factor: unit.factor() }
-    }
-
-    /// Get the theoretical mean of the distribution
-    pub fn mean(&self) -> Float { (self.mu + 0.5 * self.sigma.powi(2)).exp() }
-
-    /// Get the theoretical variance of the distribution
-    pub fn variance(&self) -> Float {
-        self.sigma.powi(2).exp_m1() * (2.0 * self.mu + self.sigma.powi(2)).exp()
+        Self { mu, sigma, unit }
     }
 }
 
 impl Distribution for LogNormal {
     fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
         let x = scaled_zignor_method(rng, self.mu, self.sigma);
-        Duration::from_secs_float(x.exp() * self.factor)
+        self.unit.to(x.exp())
+    }
+
+    fn mean(&self, _: Duration) -> Duration {
+        let raw = (self.mu + 0.5 * self.sigma.powi(2)).exp();
+        self.unit.to(raw)
+    }
+
+    fn variance(&self, _: Duration) -> Duration {
+        let raw = self.sigma.powi(2).exp_m1() * (2.0 * self.mu + self.sigma.powi(2)).exp();
+        self.unit.to2(raw)
     }
 }
 
@@ -84,10 +86,14 @@ impl Distribution for LogNormal {
 /// use std::time::Duration;
 /// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, LogNormalTV};
-/// use opencct::time::{TimeUnit, DurationExtension};
+/// use opencct::TimeUnit;
 ///
 /// let mut rng = StdRng::from_os_rng();
-/// let dist = LogNormalTV::new(|t| 1.0 + t.as_secs_float() * 0.1, |t| 3.0 + t.as_secs_float() * 0.1, TimeUnit::Seconds);
+/// let dist = LogNormalTV::new(
+///     |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     |t| 3.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     TimeUnit::Seconds,
+/// );
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
@@ -97,8 +103,8 @@ pub struct LogNormalTV<FMu, FSigma> {
     mu      : FMu,
     /// The logarithm of scale as a function of time
     sigma   : FSigma,
-    /// Time unit factor
-    factor  : Float,
+    /// Time unit
+    unit    : TimeUnit,
 }
 
 impl<FMu, FSigma> LogNormalTV<FMu, FSigma>
@@ -116,7 +122,7 @@ where
     /// # Be careful!
     /// `sigma` bound is not checked in release mode! Make sure you fulfill it!
     pub fn new(mu: FMu, sigma: FSigma, unit: TimeUnit) -> Self {
-        Self { mu, sigma, factor: unit.factor() }
+        Self { mu, sigma, unit }
     }
 
     /// Get the parameters (mu, sigma) of the distribution at a given point in time
@@ -124,18 +130,6 @@ where
         let (mu, sigma) = ((self.mu)(at), (self.sigma)(at));
         debug_assert!(sigma > 0.0, "Invalid sigma at {at:?}: {sigma}");
         (mu, sigma)
-    }
-
-    /// Get the theoretical mean of the distribution at a given time point
-    pub fn mean_at(&self, at: Duration) -> Float {
-        let (mu, sigma) = self.get_parameters_at(at);
-        (mu + 0.5 * sigma.powi(2)).exp()
-    }
-
-    /// Get the theoretical variance of the distribution at a given time point
-    pub fn variance_at(&self, at: Duration) -> Float {
-        let (mu, sigma) = self.get_parameters_at(at);
-        sigma.powi(2).exp_m1() * (2.0 * mu + sigma.powi(2)).exp()
     }
 }
 
@@ -151,7 +145,27 @@ where
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (mu, sigma) = self.get_parameters_at(at);
         let x = scaled_zignor_method(rng, mu, sigma);
-        Duration::from_secs_float(x.exp() * self.factor)
+        self.unit.to(x.exp())
+    }
+
+    /// See [Distribution::mean]
+    /// # Panic
+    /// In debug, this function will panic if at the requested time the logarithm of scale <= 0
+    /// **This is NOT checked in release mode!**
+    fn mean(&self, at: Duration) -> Duration {
+        let (mu, sigma) = self.get_parameters_at(at);
+        let raw = (mu + 0.5 * sigma.powi(2)).exp();
+        self.unit.to(raw)
+    }
+
+    /// See [Distribution::variance]
+    /// # Panic
+    /// In debug, this function will panic if at the requested time the logarithm of scale <= 0
+    /// **This is NOT checked in release mode!**
+    fn variance(&self, at: Duration) -> Duration {
+        let (mu, sigma) = self.get_parameters_at(at);
+        let raw = sigma.powi(2).exp_m1() * (2.0 * mu + sigma.powi(2)).exp();
+        self.unit.to2(raw)
     }
 }
 
@@ -172,7 +186,7 @@ mod tests {
             for _ in 0..100 {
                 let sample = dist.sample_at_t0(&mut rng);
                 assert!(
-                    sample.as_secs_float() > 0.0,
+                    sample > Duration::ZERO,
                     "LogNormal sample should be > 0, got {sample:?}",
                 );
             }
@@ -194,15 +208,12 @@ mod tests {
             let dist = LogNormal::new(mu, sigma, TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
 
-            let samples: Vec<_> = dist.sample_n_at_t0(N_SAMPLES, &mut rng)
-                .iter()
-                .map(|d| d.as_secs_float())
-                .collect();
+            let samples: Vec<_> = dist.sample_n_at_t0(N_SAMPLES, &mut rng);
 
             let stats = BasicStatistics::compute(&samples);
 
-            assert_close(stats.mean(), dist.mean(), 0.05, "LogNormal mean"); // 5% tolerance
-            assert_close(stats.variance(), dist.variance(), 0.10, "LogNormal variance"); // 10% tolerance
+            assert_close(stats.mean(), dist.mean_at_t0(), 0.05, "LogNormal mean"); // 5% tolerance
+            assert_close(stats.variance(), dist.variance_at_t0(), 0.10, "LogNormal variance"); // 10% tolerance
         }
     }
 
@@ -218,7 +229,7 @@ mod tests {
                 let t = Duration::from_secs(i);
                 let sample = dist.sample(t, &mut rng);
                 assert!(
-                    sample.as_secs_float() > 0.0,
+                    sample > Duration::ZERO,
                     "LogNormalTV sample should be > 0, got {sample:?} at t={t:?}",
                 );
             }
@@ -227,31 +238,30 @@ mod tests {
         #[test]
         #[ignore]
         fn mean_and_variance_time_varying() {
-            let mu_fn = |t: Duration| 0.5 * t.as_secs_float() + 0.1;
-            let sigma_fn = |_| 0.25;
             const N_SAMPLES: usize = 500_000;
 
-            let dist = LogNormalTV::new(mu_fn, sigma_fn, TimeUnit::Seconds);
+            let dist = LogNormalTV::new(
+                |t: Duration| 0.5 * TimeUnit::Seconds.from(t) + 0.1,
+                |_| 0.25,
+                TimeUnit::Seconds,
+            );
             let mut rng = StdRng::from_os_rng();
 
             for t_sec in [0, 4, 8] {
                 let t = Duration::from_secs(t_sec);
-                let samples: Vec<Float> = dist.sample_n(N_SAMPLES, t, &mut rng)
-                    .iter()
-                    .map(|d| d.as_secs_float())
-                    .collect();
+                let samples = dist.sample_n(N_SAMPLES, t, &mut rng);
 
                 let stats = BasicStatistics::compute(&samples);
 
                 assert_close(
                     stats.mean(),
-                    dist.mean_at(t),
+                    dist.mean(t),
                     0.05,
                     &format!("LogNormalTV mean at t={t_sec}"),
                 );
                 assert_close(
                     stats.variance(),
-                    dist.variance_at(t),
+                    dist.variance(t),
                     0.10,
                     &format!("LogNormalTV variance at t={t_sec}"),
                 );
