@@ -4,7 +4,7 @@ use std::time::Duration;
 use rand::RngCore;
 
 use crate::{
-    time::{DurationExtension, TimeUnit},
+    time::TimeUnit,
     Float,
 };
 use super::{
@@ -38,8 +38,8 @@ pub struct Normal {
     mu      : Float,
     /// The standard deviation (> 0)
     sigma   : Float,
-    /// Time unit factor
-    factor  : Float,
+    /// Time unit
+    unit    : TimeUnit,
 }
 
 impl Normal {
@@ -54,21 +54,19 @@ impl Normal {
     /// This function panics if `sigma <= 0`
     pub fn new(mu: Float, sigma: Float, unit: TimeUnit) -> Self {
         assert!(sigma > 0.0, "Sigma ({sigma}) must be > 0");
-        Self { mu, sigma, factor: unit.factor() }
+        Self { mu, sigma, unit }
     }
-
-    /// Get the theoretical mean of the distribution
-    pub fn mean(&self) -> Float { self.mu }
-
-    /// Get the theoretical variance of the distribution
-    pub fn variance(&self) -> Float { self.sigma.powi(2) }
 }
 
 impl Distribution for Normal {
     fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
-        let x = scaled_zignor_method(rng, self.mu, self.sigma);
-        Duration::from_secs_float(x.max(0.0) * self.factor)
+        let raw = scaled_zignor_method(rng, self.mu, self.sigma);
+        self.unit.to_duration(raw.max(0.0))
     }
+
+    fn mean(&self, _: Duration) -> Duration { self.unit.to_duration(self.mu) }
+
+    fn variance(&self, _: Duration) -> Duration { self.unit.to_duration(self.sigma.powi(2)) }
 }
 
 /// Normal distribution with time-varying parmeters. Since in the current context,
@@ -84,10 +82,14 @@ impl Distribution for Normal {
 /// use std::time::Duration;
 /// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, NormalTV};
-/// use opencct::time::{TimeUnit, DurationExtension};
+/// use opencct::time::TimeUnit;
 ///
 /// let mut rng = StdRng::from_os_rng();
-/// let dist = NormalTV::new(|t| 1.0 + t.as_secs_float() * 0.1, |t| 3.0 + t.as_secs_float() * 0.1, TimeUnit::Seconds);
+/// let dist = NormalTV::new(
+///     |t| 1.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
+///     |t| 3.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
+///     TimeUnit::Seconds,
+/// );
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
@@ -97,8 +99,8 @@ pub struct NormalTV<FMu, FSigma> {
     mu      : FMu,
     /// The standard deviation as a function of time
     sigma   : FSigma,
-    /// Time unit factor
-    factor  : Float,
+    /// Time unit
+    unit    : TimeUnit,
 }
 
 impl<FMu, FSigma> NormalTV<FMu, FSigma>
@@ -116,7 +118,7 @@ where
     /// # Be careful!
     /// `sigma` bound is not checked in release mode! Make sure you fulfill it!
     pub fn new(mu: FMu, sigma: FSigma, unit: TimeUnit) -> Self {
-        Self { mu, sigma, factor: unit.factor() }
+        Self { mu, sigma, unit }
     }
 
     /// Get the parameters (mu, sigma) of the distribution at a given point in time
@@ -125,12 +127,6 @@ where
         debug_assert!(sigma > 0.0, "Invalid sigma at {at:?}: {sigma}");
         (mu, sigma)
     }
-
-    /// Get the theoretical mean of the distribution at a given time point
-    pub fn mean_at(&self, at: Duration) -> Float { self.get_parameters_at(at).0 }
-
-    /// Get the theoretical variance of the distribution at a given time point
-    pub fn variance_at(&self, at: Duration) -> Float { self.get_parameters_at(at).1.powi(2) }
 }
 
 impl<FMu, FSigma> Distribution for NormalTV<FMu, FSigma>
@@ -144,8 +140,24 @@ where
     /// **This is NOT checked in release mode!**
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (mu, sigma) = self.get_parameters_at(at);
-        let x = scaled_zignor_method(rng, mu, sigma);
-        Duration::from_secs_float(x.max(0.0) * self.factor)
+        let raw = scaled_zignor_method(rng, mu, sigma);
+        self.unit.to_duration(raw.max(0.0))
+    }
+
+    /// See [Distribution::mean]
+    /// # Panic
+    /// In debug, this function will panic if at the requested time the standard deviation <= 0
+    /// **This is NOT checked in release mode!**
+    fn mean(&self, at: Duration) -> Duration {
+        self.unit.to_duration(self.get_parameters_at(at).0)
+    }
+
+    /// See [Distribution::variance]
+    /// # Panic
+    /// In debug, this function will panic if at the requested time the standard deviation <= 0
+    /// **This is NOT checked in release mode!**
+    fn variance(&self, at: Duration) -> Duration {
+        self.unit.to_duration(self.get_parameters_at(at).1.powi(2))
     }
 }
 
@@ -160,12 +172,12 @@ mod tests {
 
         #[test]
         fn samples_positive() {
-            let dist = Normal::new(5.0, 2.0, TimeUnit::Millis);
+            let dist = Normal::new(0.5, 2.0, TimeUnit::Millis);
             let mut rng = StdRng::from_os_rng();
 
             for _ in 0..100 {
-                let sample = dist.sample_at_t0(&mut rng).as_millis_float();
-                assert!(sample >= 0.0, "Normal sample should be >= 0, got {sample}");
+                let sample = dist.sample_at_t0(&mut rng);
+                assert!(sample >= Duration::ZERO, "Normal sample should be >= 0, got {sample:?}");
             }
         }
 
@@ -184,15 +196,12 @@ mod tests {
 
             let dist = Normal::new(mu, sigma, TimeUnit::Millis);
             let mut rng = StdRng::from_os_rng();
-            let samples: Vec<_> = dist.sample_n_at_t0(N_SAMPLES, &mut rng)
-                .iter()
-                .map(|d| d.as_millis_float())
-                .collect();
+            let samples = dist.sample_n_at_t0(N_SAMPLES, &mut rng);
 
             let stats = BasicStatistics::compute(&samples);
 
-            assert_close(stats.mean(), dist.mean(), 0.01, "Normal mean");      // 1% tolerance
-            assert_close(stats.variance(), dist.variance(), 0.02, "Normal variance"); // 2% tolerance
+            assert_close(stats.mean(), dist.mean_at_t0(), 0.01, "Normal mean");      // 1% tolerance
+            assert_close(stats.variance(), dist.variance_at_t0(), 0.02, "Normal variance"); // 2% tolerance
         }
     }
 
@@ -202,16 +211,16 @@ mod tests {
         #[test]
         fn samples_positive() {
             let dist = NormalTV::new(
-                |t| 5.0 + t.as_secs_float() * 0.1,
-                |t| 2.0 + t.as_secs_float() * 0.05,
+                |t| 0.5 + TimeUnit::Millis.from_duration(t) * 0.01,
+                |t| 2.0 + TimeUnit::Millis.from_duration(t) * 0.05,
                 TimeUnit::Millis,
             );
             let mut rng = StdRng::from_os_rng();
 
             for i in 0..10 {
                 let t = Duration::from_secs(i);
-                let sample = dist.sample(t, &mut rng).as_millis_float();
-                assert!(sample >= 0.0, "NormalTV sample should be >= 0, got {sample} at t={t:?}");
+                let sample = dist.sample(t, &mut rng);
+                assert!(sample >= Duration::ZERO, "NormalTV sample should be >= 0, got {sample:?} at t={t:?}");
             }
         }
 
@@ -221,23 +230,20 @@ mod tests {
             const N_SAMPLES: usize = 500_000;
 
             let dist = NormalTV::new(
-                |t| 50.0 + t.as_secs_float() * 0.1,
-                |t| 2.0 + t.as_secs_float() * 0.05,
+                |t| 50.0 + TimeUnit::Millis.from_duration(t) * 0.1,
+                |t| 2.0 + TimeUnit::Millis.from_duration(t) * 0.05,
                 TimeUnit::Millis,
             );
             let mut rng = StdRng::from_os_rng();
 
-            for t_sec in [0, 5, 10] {
-                let t = Duration::from_secs(t_sec);
-                let samples: Vec<Float> = dist.sample_n(N_SAMPLES, t, &mut rng)
-                    .iter()
-                    .map(|d| d.as_millis_float())
-                    .collect();
+            for t_mill in [0, 5, 10] {
+                let t = Duration::from_millis(t_mill);
+                let samples = dist.sample_n(N_SAMPLES, t, &mut rng);
 
                 let stats = BasicStatistics::compute(&samples);
 
-                assert_close(stats.mean(), dist.mean_at(t), 0.01, &format!("NormalTV mean at t={t_sec}"));
-                assert_close(stats.variance(), dist.variance_at(t), 0.02, &format!("NormalTV variance at t={t_sec}"));
+                assert_close(stats.mean(), dist.mean(t), 0.01, &format!("NormalTV mean at t={t_mill}"));
+                assert_close(stats.variance(), dist.variance(t), 0.02, &format!("NormalTV variance at t={t_mill}"));
             }
         }
     }

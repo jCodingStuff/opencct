@@ -4,7 +4,7 @@ use std::time::Duration;
 use rand::RngCore;
 
 use crate::{
-    time::{DurationExtension, TimeUnit},
+    time::TimeUnit,
     Float,
 };
 use super::{

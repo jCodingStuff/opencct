@@ -4,7 +4,7 @@ use std::time::Duration;
 use rand::{Rng, RngCore};
 
 use crate::{
-    time::{DurationExtension, TimeUnit},
+    time::TimeUnit,
     Float,
 };
 use super::Distribution;
@@ -33,8 +33,8 @@ pub struct Triangular {
     c       : Float,
     /// (c-a)/(b-a)
     fc      : Float,
-    /// Time unit factor
-    factor  : Float,
+    /// Time unit
+    unit    : TimeUnit,
 }
 
 impl Triangular {
@@ -50,19 +50,7 @@ impl Triangular {
     /// This function panics if `a < 0` or `c < a` or `b < c` or `b <= a`
     pub fn new(a: Float, b: Float, c: Float, unit: TimeUnit) -> Self {
         assert!(a >= 0.0 && c >= a && b >= c && b > a, "Invalid parameters [a: {a}, b: {b}, c: {c}]");
-        Self { a, b, c, fc: (c-a)/(b-a), factor: unit.factor() }
-    }
-
-    /// Get the theoretical mean of the distribution
-    pub fn mean(&self) -> Float { (self.a + self.b + self.c) / 3.0 }
-
-    /// Get the theoretical variance of the distribution
-    pub fn variance(&self) -> Float {
-        (
-            self.a.powi(2) + self.b.powi(2) + self.c.powi(2)
-            - self.a * self.b - self.a * self.c - self.b * self.c
-        )
-        / 18.0
+        Self { a, b, c, fc: (c-a)/(b-a), unit }
     }
 }
 
@@ -74,7 +62,20 @@ impl Distribution for Triangular {
         } else {
             self.b - ((1.0-u)*(self.b-self.a)*(self.b-self.c)).sqrt()
         };
-        Duration::from_secs_float(raw * self.factor)
+        self.unit.to_duration(raw)
+    }
+
+    fn mean(&self, _: Duration) -> Duration {
+        let raw = (self.a + self.b + self.c) / 3.0;
+        self.unit.to_duration(raw)
+    }
+
+    fn variance(&self, _: Duration) -> Duration {
+        let raw = (
+            self.a.powi(2) + self.b.powi(2) + self.c.powi(2)
+            - self.a * self.b - self.a * self.c - self.b * self.c
+        ) / 18.0;
+        self.unit.to_duration(raw)
     }
 }
 
@@ -85,13 +86,13 @@ impl Distribution for Triangular {
 /// use std::time::Duration;
 /// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, TriangularTV};
-/// use opencct::time::{TimeUnit, DurationExtension};
+/// use opencct::time::TimeUnit;
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = TriangularTV::new(
-///     |t| 1.0 + t.as_hours_float() * 0.1,
-///     |t| 3.0 + t.as_hours_float() * 0.1,
-///     |t| 2.0 + t.as_hours_float() * 0.1,
+///     |t| 1.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
+///     |t| 3.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
+///     |t| 2.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
 ///     TimeUnit::Hours,
 /// );
 /// let sample = dist.sample(Duration::from_hours(2), &mut rng);
@@ -105,8 +106,8 @@ pub struct TriangularTV<Fa, Fb, Fc> {
     b       : Fb,
     /// Mode as a function of time
     c       : Fc,
-    /// Time unit factor
-    factor  : Float,
+    /// Time unit
+    unit    : TimeUnit,
 }
 
 impl<Fa, Fb, Fc> TriangularTV<Fa, Fb, Fc>
@@ -126,7 +127,7 @@ where
     /// # Be careful!
     /// `a`, `b`, and `c` conditions are not checked in release mode! Make sure you fulfill them!
     pub fn new(a: Fa, b: Fb, c: Fc, unit: TimeUnit) -> Self {
-        Self { a, b, c, factor: unit.factor() }
+        Self { a, b, c, unit }
     }
 
     /// Get the parameters (a, b, c) of the distribution at a given point in time
@@ -134,18 +135,6 @@ where
         let (a, b, c) = ((self.a)(at), (self.b)(at), (self.c)(at));
         debug_assert!(a >= 0.0 && c >= a && b >= c && b > a, "At t:{at:?} found invalid parameters [a: {a}, b: {b}, c: {c}]");
         (a, b, c)
-    }
-
-    /// Get the theoretical mean of the distribution at a given time point
-    pub fn mean_at(&self, at: Duration) -> Float {
-        let (a, b, c) = self.get_parameters_at(at);
-        (a + b + c) / 3.0
-    }
-
-    /// Get the theoretical variance of the distribution at a given time point
-    pub fn variance_at(&self, at: Duration) -> Float {
-        let (a, b, c) = self.get_parameters_at(at);
-        (a.powi(2) + b.powi(2) + c.powi(2) - a * b - a * c - b * c) / 18.0
     }
 }
 
@@ -167,7 +156,27 @@ where
         } else {
             b - ((1.0-u)*(b-a)*(b-c)).sqrt()
         };
-        Duration::from_secs_float(raw * self.factor)
+        self.unit.to_duration(raw)
+    }
+
+    /// See [Distribution::mean]
+    /// # Panic
+    /// In debug, this function will panic if at the requested time `a < 0` or `c < a` or `b < c` or `b < a`
+    /// **This is NOT checked in release mode!**
+    fn mean(&self, at: Duration) -> Duration {
+        let (a, b, c) = self.get_parameters_at(at);
+        let raw = (a + b + c) / 3.0;
+        self.unit.to_duration(raw)
+    }
+
+    /// See [Distribution::variance]
+    /// # Panic
+    /// In debug, this function will panic if at the requested time `a < 0` or `c < a` or `b < c` or `b < a`
+    /// **This is NOT checked in release mode!**
+    fn variance(&self, at: Duration) -> Duration {
+        let (a, b, c) = self.get_parameters_at(at);
+        let raw = (a.powi(2) + b.powi(2) + c.powi(2) - a * b - a * c - b * c) / 18.0;
+        self.unit.to_duration(raw)
     }
 }
 
@@ -186,7 +195,7 @@ mod tests {
             let mut rng = StdRng::from_os_rng();
 
             for _ in 0..10 {
-                let v = dist.sample_at_t0(&mut rng).as_secs_float();
+                let v = TimeUnit::Seconds.from_duration(dist.sample_at_t0(&mut rng));
                 assert!(v.is_finite(), "Sampled value must be finite, got {v}");
                 assert!(v >= 1.0 && v <= 5.0, "Sample {v} out of bounds [1.0, 5.0]");
             }
@@ -226,15 +235,12 @@ mod tests {
 
             let dist = Triangular::new(a, b, c, TimeUnit::Seconds);
             let mut rng = StdRng::seed_from_u64(123);
-            let samples: Vec<_> = dist.sample_n_at_t0(N_SAMPLES, &mut rng)
-                .iter()
-                .map(|d| d.as_secs_float())
-                .collect();
+            let samples = dist.sample_n_at_t0(N_SAMPLES, &mut rng);
 
             let stats = BasicStatistics::compute(&samples);
 
-            assert_close(stats.mean(), dist.mean(), 0.02, "Triangular mean");
-            assert_close(stats.variance(), dist.variance(), 0.05, "Triangular variance");
+            assert_close(stats.mean(), dist.mean_at_t0(), 0.02, "Triangular mean");
+            assert_close(stats.variance(), dist.variance_at_t0(), 0.05, "Triangular variance");
         }
     }
 
@@ -247,7 +253,7 @@ mod tests {
             let mut rng = StdRng::from_os_rng();
 
             for _ in 0..10 {
-                let v = dist.sample_at_t0(&mut rng).as_secs_float();
+                let v = TimeUnit::Seconds.from_duration(dist.sample_at_t0(&mut rng));
                 assert!(v.is_finite(), "Sampled value must be finite, got {v}");
                 assert!(v >= 1.0 && v <= 5.0, "Sample {v} out of bounds [1.0, 5.0]");
             }
@@ -259,31 +265,28 @@ mod tests {
             const N_SAMPLES: usize = 500_000;
 
             let dist = TriangularTV::new(
-                |t| 0.5 * t.as_secs_float() + 0.5,
-                |t| 0.7 * t.as_secs_float() + 4.0,
-                |t| 0.65 * t.as_secs_float() + 0.89,
+                |t| 0.5 * TimeUnit::Seconds.from_duration(t) + 0.5,
+                |t| 0.7 * TimeUnit::Seconds.from_duration(t) + 4.0,
+                |t| 0.65 * TimeUnit::Seconds.from_duration(t) + 0.89,
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();
 
             for t_sec in [0, 5, 10] {
                 let t = Duration::from_secs(t_sec);
-                let samples: Vec<Float> = dist.sample_n(N_SAMPLES, t, &mut rng)
-                    .iter()
-                    .map(|d| d.as_secs_float())
-                    .collect();
+                let samples = dist.sample_n(N_SAMPLES, t, &mut rng);
 
                 let stats = BasicStatistics::compute(&samples);
 
                 assert_close(
                     stats.mean(),
-                    dist.mean_at(t),
+                    dist.mean(t),
                     0.01,
                     &format!("TriangularTV mean at t={t_sec}"),
                 );
                 assert_close(
                     stats.variance(),
-                    dist.variance_at(t),
+                    dist.variance(t),
                     0.02,
                     &format!("TriangularTV variance at t={t_sec}"),
                 );
