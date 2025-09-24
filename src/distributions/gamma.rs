@@ -35,6 +35,8 @@ use super::{
 /// ```
 #[derive(Debug, Copy, Clone)]
 pub struct GammaErlang {
+    /// Shape parameter
+    alpha   : Float,
     /// Scale parameter
     theta   : Float,
     /// Time unit factor
@@ -55,8 +57,14 @@ impl GammaErlang {
     /// This function panics if either `alpha` or `theta` are <= 0
     pub fn new(alpha: Float, theta: Float, unit: TimeUnit) -> Self {
         assert!(alpha > 0.0 && theta > 0.0, "Invalid alpha {alpha} or theta {theta}");
-        Self {theta, factor: unit.factor(), method: MarsagliaTsang::setup(alpha) }
+        Self { alpha, theta, factor: unit.factor(), method: MarsagliaTsang::setup(alpha) }
     }
+
+    /// Get the theoretical mean of the distribution
+    pub fn mean(&self) -> Float { self.alpha * self.theta }
+
+    /// Get the theoretical variance of the distribution
+    pub fn variance(&self) -> Float { self.alpha * self.theta.powi(2) }
 }
 
 impl Distribution for GammaErlang {
@@ -112,6 +120,25 @@ where
     pub fn new(alpha: Fa, theta: Fb, unit: TimeUnit) -> Self {
         Self { alpha, theta, factor: unit.factor() }
     }
+
+    /// Get the parameters (alpha, theta) of the distribution at a given point in time
+    fn get_parameters_at(&self, at: Duration) -> (Float, Float) {
+        let (alpha, theta) = ((self.alpha)(at), (self.theta)(at));
+        debug_assert!(alpha > 0.0 && theta > 0.0, "Invalid alpha {alpha} or theta {theta} bound at {at:?}");
+        (alpha, theta)
+    }
+
+    /// Get the theoretical mean of the distribution at a given time point
+    pub fn mean_at(&self, at: Duration) -> Float {
+        let (alpha, theta) = self.get_parameters_at(at);
+        alpha * theta
+    }
+
+    /// Get the theoretical variance of the distribution at a given time point
+    pub fn variance_at(&self, at: Duration) -> Float {
+        let (alpha, theta) = self.get_parameters_at(at);
+        alpha * theta.powi(2)
+    }
 }
 
 impl<Fa, Fb> Distribution for GammaErlangTV<Fa, Fb>
@@ -124,9 +151,7 @@ where
     /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
     /// **This is NOT checked in release mode!**
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
-        let alpha = (self.alpha)(at);
-        let theta = (self.theta)(at);
-        debug_assert!(alpha > 0.0 && theta > 0.0, "Invalid alpha {alpha} or theta {theta} bound at {at:?}");
+        let (alpha, theta) = self.get_parameters_at(at);
         let raw = MarsagliaTsang::sample(rng, alpha, theta);
         Duration::from_secs_float(raw * self.factor)
     }
@@ -181,16 +206,15 @@ mod tests {
             let dist = GammaErlang::new(alpha, theta, TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
 
-            let samples: Vec<Float> = (0..N_SAMPLES)
-                .map(|_| dist.sample_at_t0(&mut rng).as_secs_float())
+            let samples: Vec<Float> = dist.sample_n_at_t0(N_SAMPLES, &mut rng)
+                .iter()
+                .map(|d| d.as_secs_float())
                 .collect();
 
             let stats = BasicStatistics::compute(&samples);
-            let expected_mean = alpha * theta;
-            let expected_var = alpha * theta.powi(2);
 
-            assert_close(stats.mean(), expected_mean, 0.01, "GammaErlang mean"); // 1% tolerance
-            assert_close(stats.variance(), expected_var, 0.02, "GammaErlang variance"); // 2% tolerance
+            assert_close(stats.mean(), dist.mean(), 0.01, "GammaErlang mean"); // 1% tolerance
+            assert_close(stats.variance(), dist.variance(), 0.02, "GammaErlang variance"); // 2% tolerance
         }
     }
 
@@ -210,30 +234,31 @@ mod tests {
         fn mean_and_variance_large_sample_tv() {
             const N_SAMPLES: usize = 500_000;
 
-            let alpha = 2.0;
-            let theta = 3.0;
-            let dist = GammaErlangTV::new(|_| alpha, |_| theta, TimeUnit::Seconds);
+            let dist = GammaErlangTV::new(
+                |t| 0.5 * t.as_secs_float() + 0.1,
+                |t| 0.2 * t.as_secs_float() + 1.0,
+                TimeUnit::Seconds,
+            );
             let mut rng = StdRng::from_os_rng();
 
             for t_sec in [0, 5, 10] {
                 let t = Duration::from_secs(t_sec);
-                let samples: Vec<Float> = (0..N_SAMPLES)
-                    .map(|_| dist.sample(t, &mut rng).as_secs_float())
+                let samples: Vec<Float> = dist.sample_n(N_SAMPLES, t, &mut rng)
+                    .iter()
+                    .map(|d| d.as_secs_float())
                     .collect();
 
                 let stats = BasicStatistics::compute(&samples);
-                let expected_mean = alpha * theta;
-                let expected_var = alpha * theta.powi(2);
 
                 assert_close(
                     stats.mean(),
-                    expected_mean,
+                    dist.mean_at(t),
                     0.01,
                     &format!("GammaErlangTV mean at t={t_sec}"),
                 );
                 assert_close(
                     stats.variance(),
-                    expected_var,
+                    dist.variance_at(t),
                     0.02,
                     &format!("GammaErlangTV variance at t={t_sec}"),
                 );

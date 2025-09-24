@@ -6,6 +6,38 @@ use rand::RngCore;
 /// Trait for probability distributions.
 /// All structs implementing this trait must know that the base unit is seconds.
 pub trait Distribution {
+    /// Get the theoretical mean of the distribution at a given time.
+    /// Distributions that care about theoretical statistics should override this method.
+    /// The default implementation returns [Duration::ZERO].
+    /// # Arguments
+    /// * `at` - the requested time as [Duration]
+    /// # Returns
+    /// The theoretical mean as [Duration]
+    fn mean(&self, _at: Duration) -> Duration { Duration::ZERO }
+
+    /// Get the theoretical mean of the distribution at time 0.
+    /// # Returns
+    /// The theoretical mean as [Duration]
+    fn mean_at_t0(&self) -> Duration {
+        self.mean(Duration::ZERO)
+    }
+
+    /// Get the theoretical variance of the distribution at a given time.
+    /// Distributions that care about theoretical statistics should override this method.
+    /// The default implementation returns [Duration::ZERO].
+    /// # Arguments
+    /// * `at` - the requested time as [Duration]
+    /// # Returns
+    /// The theoretical variance as [Duration]
+    fn variance(&self, _at: Duration) -> Duration { Duration::ZERO }
+
+    /// Get the theoretical variance of the distribution at time 0.
+    /// # Returns
+    /// The theoretical variance as [Duration]
+    fn variance_at_t0(&self) -> Duration {
+        self.variance(Duration::ZERO)
+    }
+
     /// Sample a value from the distribution at a given time.
     /// # Arguments
     /// * `at` - [Duration] since the start of the simulation.

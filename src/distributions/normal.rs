@@ -179,7 +179,7 @@ mod tests {
         #[ignore]
         fn mean_and_variance() {
             const N_SAMPLES: usize = 500_000;
-            let mu = 5.0;
+            let mu = 50.0;
             let sigma = 2.0;
 
             let dist = Normal::new(mu, sigma, TimeUnit::Millis);
@@ -221,7 +221,7 @@ mod tests {
             const N_SAMPLES: usize = 500_000;
 
             let dist = NormalTV::new(
-                |t| 5.0 + t.as_secs_float() * 0.1,
+                |t| 50.0 + t.as_secs_float() * 0.1,
                 |t| 2.0 + t.as_secs_float() * 0.05,
                 TimeUnit::Millis,
             );

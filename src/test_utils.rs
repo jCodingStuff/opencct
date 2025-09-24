@@ -7,7 +7,20 @@
 //! These utilities are not intended for use in production code but
 //! only in `#[cfg(test)]` contexts across different distribution modules.
 
-use crate::Float;
+use std::time::Duration;
+use crate::{time::DurationExtension, Float};
+
+pub trait ToFloat {
+    fn to_float(&self) -> Float;
+}
+
+impl ToFloat for Float {
+    fn to_float(&self) -> Float { *self }
+}
+
+impl ToFloat for Duration {
+    fn to_float(&self) -> Float { self.as_secs_float() }
+}
 
 /// A simple container for basic population statistics computed from a slice of samples.
 ///
@@ -44,9 +57,10 @@ impl BasicStatistics {
     ///
     /// # Panics
     /// This method panics if `samples` is empty.
-    pub fn compute(samples: &[Float]) -> Self {
-        let mean = samples.iter().sum::<Float>() / samples.len() as Float;
-        let variance = samples.iter().map(|x| (x - mean).powi(2)).sum::<Float>() / samples.len() as Float;
+    pub fn compute<T: ToFloat>(samples: &[T]) -> Self {
+        let values: Vec<Float> = samples.iter().map(|x| x.to_float()).collect();
+        let mean = values.iter().sum::<Float>() / values.len() as Float;
+        let variance = values.iter().map(|x| (x - mean).powi(2)).sum::<Float>() / values.len() as Float;
         Self { mean, variance }
     }
 
@@ -82,10 +96,15 @@ impl BasicStatistics {
 /// let expected = 10.0;
 /// assert_close(actual, expected, 0.05, "test value"); // passes
 /// ```
-pub fn assert_close(actual: Float, expected: Float, tolerance: Float, label: &str) {
+pub fn assert_close<T1, T2>(actual: T1, expected: T2, tolerance: Float, label: &str)
+where
+    T1: ToFloat,
+    T2: ToFloat,
+{
     assert!(
-        (actual - expected).abs() <= expected * tolerance,
-        "{label} {actual} outside tolerance of expected {expected}"
+        (actual.to_float() - expected.to_float()).abs() <= expected.to_float() * tolerance,
+        "{} {} outside tolerance of expected {}",
+        label, actual.to_float(), expected.to_float(),
     );
 }
 

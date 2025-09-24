@@ -43,6 +43,12 @@ impl Exponential {
         assert!(lambda > 0.0, "Lambda ({lambda}) must be > 0");
         Self { lambda, factor: unit.factor() }
     }
+
+    /// Get the theoretical mean of the distribution
+    pub fn mean(&self) -> Float { 1.0 / self.lambda }
+
+    /// Get the theoretical variance of the distribution
+    pub fn variance(&self) -> Float { 1.0 / self.lambda.powi(2) }
 }
 
 impl Distribution for Exponential {
@@ -88,6 +94,19 @@ where
     pub fn new(lambda: F, unit: TimeUnit) -> Self {
         Self { lambda, factor: unit.factor() }
     }
+
+    /// Get the lambda parameter at a given point in time
+    fn get_lambda_at(&self, at: Duration) -> Float {
+        let lambda = (self.lambda)(at);
+        debug_assert!(lambda > 0.0, "Invalid lambda at {at:?}: {lambda}");
+        lambda
+    }
+
+    /// Get the theoretical mean of the distribution at a given time
+    pub fn mean_at(&self, at: Duration) -> Float { 1.0 / self.get_lambda_at(at) }
+
+    /// Get the theoretical variance of the distribution at a given time
+    pub fn variance_at(&self, at: Duration) -> Float { 1.0 / self.get_lambda_at(at).powi(2) }
 }
 
 impl<F> Distribution for ExponentialTV<F>
@@ -99,8 +118,7 @@ where
     /// In debug, this function will panic if at the requested time the rate parameter <= 0.
     /// **This is NOT checked in release mode!**
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
-        let lambda = (self.lambda)(at);
-        debug_assert!(lambda > 0.0, "Invalid lambda at {at:?}: {lambda}");
+        let lambda = self.get_lambda_at(at);
         let raw = -rng.random::<Float>().ln() / lambda;
         Duration::from_secs_float(raw * self.factor)
     }
@@ -150,16 +168,15 @@ mod tests {
             let dist = Exponential::new(lambda, TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
 
-            let samples: Vec<Float> = (0..N_SAMPLES)
-                .map(|_| dist.sample_at_t0(&mut rng).as_secs_float())
+            let samples: Vec<Float> = dist.sample_n_at_t0(N_SAMPLES, &mut rng)
+                .iter()
+                .map(|d| d.as_secs_float())
                 .collect();
 
             let stats = BasicStatistics::compute(&samples);
-            let expected_mean = 1.0 / lambda;
-            let expected_var = 1.0 / (lambda * lambda);
 
-            assert_close(stats.mean(), expected_mean, MEAN_TOL, "Exponential mean");
-            assert_close(stats.variance(), expected_var, VAR_TOL, "Exponential variance");
+            assert_close(stats.mean(), dist.mean(), MEAN_TOL, "Exponential mean");
+            assert_close(stats.variance(), dist.variance(), VAR_TOL, "Exponential variance");
         }
 
         #[test]
@@ -214,25 +231,23 @@ mod tests {
 
             for t_sec in [0, 5, 10] {
                 let t = Duration::from_secs(t_sec);
-                let lambda = 1.0 + t_sec as Float * 0.1;
 
-                let samples: Vec<Float> = (0..N_SAMPLES)
-                    .map(|_| dist.sample(t, &mut rng).as_secs_float())
+                let samples: Vec<Float> = dist.sample_n(N_SAMPLES, t, &mut rng)
+                    .iter()
+                    .map(|d| d.as_secs_float())
                     .collect();
 
                 let stats = BasicStatistics::compute(&samples);
-                let expected_mean = 1.0 / lambda;
-                let expected_var = 1.0 / (lambda * lambda);
 
                 assert_close(
                     stats.mean(),
-                    expected_mean,
+                    dist.mean_at(t),
                     MEAN_TOL,
                     &format!("ExponentialTV mean at t={}", t_sec),
                 );
                 assert_close(
                     stats.variance(),
-                    expected_var,
+                    dist.variance_at(t),
                     VAR_TOL,
                     &format!("ExponentialTV variance at t={}", t_sec),
                 );

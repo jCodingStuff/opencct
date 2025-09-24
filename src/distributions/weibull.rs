@@ -4,7 +4,7 @@ use std::time::Duration;
 use rand::{Rng, RngCore};
 
 use crate::{
-    time::{DurationExtension, TimeUnit},
+    time::TimeUnit,
     Float,
     math::gamma,
 };
@@ -30,8 +30,8 @@ pub struct Weibull {
     lambda  : Float,
     /// Shape parameter
     k       : Float,
-    /// Time unit factor
-    factor  : Float,
+    /// Time unit
+    unit    : TimeUnit,
 }
 
 impl Weibull {
@@ -46,22 +46,24 @@ impl Weibull {
     /// This function panics if either `lambda` or `k` are <= 0
     pub fn new(lambda: Float, k: Float, unit: TimeUnit) -> Self {
         assert!(lambda > 0.0 && k > 0.0, "Invalid paramters: [lambda: {lambda}, k: {k}]");
-        Self { lambda, k, factor: unit.factor() }
-    }
-
-    /// Get the theoretical mean of the distribution
-    pub fn mean(&self) -> Float { self.lambda * gamma(1.0 + 1.0 / self.k) }
-
-    /// Get the theoretical variance of the distribution
-    pub fn variance(&self) -> Float {
-        self.lambda.powi(2) * (gamma(1.0 + 2.0/self.k) - gamma(1.0 + 1.0/self.k).powi(2))
+        Self { lambda, k, unit }
     }
 }
 
 impl Distribution for Weibull {
     fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
         let raw = self.lambda * (-rng.random::<Float>().ln()).powf(1.0 / self.k);
-        Duration::from_secs_float(raw * self.factor)
+        self.unit.to_duration(raw)
+    }
+
+    fn mean(&self, _: Duration) -> Duration {
+        let raw = self.lambda * gamma(1.0 + 1.0 / self.k);
+        self.unit.to_duration(raw)
+    }
+
+    fn variance(&self, _: Duration) -> Duration {
+        let raw = self.lambda.powi(2) * (gamma(1.0 + 2.0/self.k) - gamma(1.0 + 1.0/self.k).powi(2));
+        self.unit.to_duration(raw)
     }
 }
 
@@ -85,8 +87,8 @@ pub struct WeibullTV<Fl, Fk> {
     lambda  : Fl,
     /// Shape parameter as a function of time
     k       : Fk,
-    /// Time unit factor
-    factor  : Float,
+    /// Time unit
+    unit    : TimeUnit,
 }
 
 impl<Fl, Fk> WeibullTV<Fl, Fk>
@@ -104,7 +106,7 @@ where
     /// # Be careful!
     /// `lambda` and `k` values are not checked in release mode! Make sure you fulfill the contract!
     pub fn new(lambda: Fl, k: Fk, unit: TimeUnit) -> Self {
-        Self { lambda, k, factor: unit.factor() }
+        Self { lambda, k, unit }
     }
 
     /// Get the parameters (lambda, k) of the distribution at a given point in time
@@ -112,18 +114,6 @@ where
         let (lambda, k) = ((self.lambda)(at), (self.k)(at));
         debug_assert!(lambda > 0.0 && k > 0.0, "Invalid lambda {lambda} or k {k} bound at {at:?}");
         (lambda, k)
-    }
-
-    /// Get the theoretical mean of the distribution at a given time point
-    pub fn mean_at(&self, at: Duration) -> Float {
-        let (lambda, k) = self.get_parameters_at(at);
-        lambda * gamma(1.0 + 1.0 / k)
-    }
-
-    /// Get the theoretical variance of the distribution at a given time point
-    pub fn variance_at(&self, at: Duration) -> Float {
-        let (lambda, k) = self.get_parameters_at(at);
-        lambda.powi(2) * (gamma(1.0 + 2.0/k) - gamma(1.0 + 1.0/k).powi(2))
     }
 }
 
@@ -139,17 +129,39 @@ where
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (lambda, k) = self.get_parameters_at(at);
         let raw = lambda * (-rng.random::<Float>().ln()).powf(1.0 / k);
-        Duration::from_secs_float(raw * self.factor)
+        self.unit.to_duration(raw)
+    }
+
+    /// See [Distribution::mean]
+    /// # Panic
+    /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
+    /// **This is NOT checked in release mode!**
+    fn mean(&self, at: Duration) -> Duration {
+        let (lambda, k) = self.get_parameters_at(at);
+        let raw = lambda * gamma(1.0 + 1.0 / k);
+        self.unit.to_duration(raw)
+    }
+
+    /// See [Distribution::variance]
+    /// # Panic
+    /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
+    /// **This is NOT checked in release mode!**
+    fn variance(&self, at: Duration) -> Duration {
+        let (lambda, k) = self.get_parameters_at(at);
+        let raw = lambda.powi(2) * (gamma(1.0 + 2.0/k) - gamma(1.0 + 1.0/k).powi(2));
+        self.unit.to_duration(raw)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::time::DurationExtension;
     use rand::{rngs::StdRng, SeedableRng};
     use crate::test_utils::{assert_close, BasicStatistics};
 
     mod weibull {
+
         use super::*;
 
         #[test]
@@ -169,15 +181,12 @@ mod tests {
             let dist = Weibull::new(lambda, k, TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
 
-            let samples: Vec<_> = dist.sample_n_at_t0(N_SAMPLES, &mut rng)
-                .iter()
-                .map(|d| d.as_secs_float())
-                .collect();
+            let samples = dist.sample_n_at_t0(N_SAMPLES, &mut rng);
 
             let stats = BasicStatistics::compute(&samples);
 
-            assert_close(stats.mean(), dist.mean(), 0.05, "Weibull mean");
-            assert_close(stats.variance(), dist.variance(), 0.10, "Weibull variance");
+            assert_close(stats.mean(), dist.mean_at_t0(), 0.05, "Weibull mean");
+            assert_close(stats.variance(), dist.variance_at_t0(), 0.10, "Weibull variance");
         }
 
         #[test]
@@ -205,24 +214,36 @@ mod tests {
         }
 
         #[test]
-        #[ignore]
-        fn mean_and_variance_at_fixed_time() {
+        #[ignore] // statistical test, expensive
+        fn mean_and_variance_large_sample_tv() {
             const N_SAMPLES: usize = 500_000;
-            let lambda: Float = 2.0;
-            let k: Float = 1.5;
-            let dist = WeibullTV::new(|_| lambda, |_| k, TimeUnit::Seconds);
+
+            let dist = WeibullTV::new(
+                |t| 0.5 * t.as_secs_float() + 0.1,
+                |t| 0.2 * t.as_secs_float() + 1.0,
+                TimeUnit::Seconds,
+            );
             let mut rng = StdRng::from_os_rng();
 
-            let t = Duration::from_secs(5);
-            let samples: Vec<_> = dist.sample_n(N_SAMPLES, t, &mut rng)
-                .iter()
-                .map(|d| d.as_secs_float())
-                .collect();
+            for t_sec in [0, 5, 10] {
+                let t = Duration::from_secs(t_sec);
+                let samples = dist.sample_n(N_SAMPLES, t, &mut rng);
 
-            let stats = BasicStatistics::compute(&samples);
+                let stats = BasicStatistics::compute(&samples);
 
-            assert_close(stats.mean(), dist.mean_at(t), 0.05, "WeibullTV mean");
-            assert_close(stats.variance(), dist.variance_at(t), 0.10, "WeibullTV variance");
+                assert_close(
+                    stats.mean(),
+                    dist.mean(t),
+                    0.01,
+                    &format!("WeibullTV mean at t={t_sec}"),
+                );
+                assert_close(
+                    stats.variance(),
+                    dist.variance(t),
+                    0.02,
+                    &format!("WeibullTV variance at t={t_sec}"),
+                );
+            }
         }
     }
 }

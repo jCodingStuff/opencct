@@ -227,7 +227,7 @@ mod tests {
         #[test]
         #[ignore]
         fn mean_and_variance_time_varying() {
-            let mu_fn = |t: Duration| 0.5 * t.as_secs_float();
+            let mu_fn = |t: Duration| 0.5 * t.as_secs_float() + 0.1;
             let sigma_fn = |_| 0.25;
             const N_SAMPLES: usize = 500_000;
 

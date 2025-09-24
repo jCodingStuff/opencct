@@ -254,25 +254,40 @@ mod tests {
         }
 
         #[test]
-        #[ignore]
-        fn mean_and_variance() {
+        #[ignore] // statistical test, expensive
+        fn mean_and_variance_large_sample_tv() {
             const N_SAMPLES: usize = 500_000;
-            let a = 1.0;
-            let b = 5.0;
-            let c = 3.0;
 
-            let t = Duration::from_secs(5);
-            let dist = TriangularTV::new(|_| a, |_| b, |_| c, TimeUnit::Seconds);
-            let mut rng = StdRng::seed_from_u64(123);
-            let samples: Vec<_> = dist.sample_n(N_SAMPLES, t, &mut rng)
-                .iter()
-                .map(|d| d.as_secs_float())
-                .collect();
+            let dist = TriangularTV::new(
+                |t| 0.5 * t.as_secs_float() + 0.5,
+                |t| 0.7 * t.as_secs_float() + 4.0,
+                |t| 0.65 * t.as_secs_float() + 0.89,
+                TimeUnit::Seconds,
+            );
+            let mut rng = StdRng::from_os_rng();
 
-            let stats = BasicStatistics::compute(&samples);
+            for t_sec in [0, 5, 10] {
+                let t = Duration::from_secs(t_sec);
+                let samples: Vec<Float> = dist.sample_n(N_SAMPLES, t, &mut rng)
+                    .iter()
+                    .map(|d| d.as_secs_float())
+                    .collect();
 
-            assert_close(stats.mean(), dist.mean_at(t), 0.02, "TriangularTV mean");
-            assert_close(stats.variance(), dist.variance_at(t), 0.05, "TriangularTV variance");
+                let stats = BasicStatistics::compute(&samples);
+
+                assert_close(
+                    stats.mean(),
+                    dist.mean_at(t),
+                    0.01,
+                    &format!("TriangularTV mean at t={t_sec}"),
+                );
+                assert_close(
+                    stats.variance(),
+                    dist.variance_at(t),
+                    0.02,
+                    &format!("TriangularTV variance at t={t_sec}"),
+                );
+            }
         }
     }
 }

@@ -1,6 +1,6 @@
 //! Beta distribution
 
-use std::time::Duration;
+use std::{time::Duration};
 use rand::RngCore;
 
 use crate::{
@@ -33,12 +33,16 @@ use super::{
 /// ```
 #[derive(Debug, Copy, Clone)]
 pub struct Beta {
+    /// Shape parameter
+    alpha           : Float,
+    /// Shape parameter
+    beta            : Float,
     /// Time unit factor
-    factor: Float,
+    factor          : Float,
     /// Sampling method struct for alpha
-    method_alpha: MarsagliaTsang,
+    method_alpha    : MarsagliaTsang,
     /// Sampling method struct for beta
-    method_beta: MarsagliaTsang,
+    method_beta     : MarsagliaTsang,
 }
 
 impl Beta {
@@ -54,10 +58,20 @@ impl Beta {
     pub fn new(alpha: Float, beta: Float, unit: TimeUnit) -> Self {
         assert!(alpha > 0.0 && beta > 0.0, "Invalid alpha {alpha} or beta {beta}");
         Self {
+            alpha,
+            beta,
             factor          : unit.factor(),
             method_alpha    : MarsagliaTsang::setup(alpha),
             method_beta     : MarsagliaTsang::setup(beta),
         }
+    }
+
+    /// Get the theoretical mean of the distribution
+    pub fn mean(&self) -> Float { self.alpha / (self.alpha + self.beta) }
+
+    /// Get the theoretical variance of the distribution
+    pub fn variance(&self) -> Float {
+        self.alpha * self.beta / ((self.alpha + self.beta).powi(2) * (self.alpha + self.beta + 1.0))
     }
 }
 
@@ -115,6 +129,25 @@ where
     pub fn new(alpha: Fa, beta: Fb, unit: TimeUnit) -> Self {
         Self { alpha, beta, factor: unit.factor() }
     }
+
+    /// Get the parameters (alpha, beta) of the distribution at a given point in time
+    fn get_parameters_at(&self, at: Duration) -> (Float, Float) {
+        let (alpha, beta) = ((self.alpha)(at), (self.beta)(at));
+        debug_assert!(alpha > 0.0 && beta > 0.0, "Invalid alpha {alpha} or beta {beta} bound at {at:?}");
+        (alpha, beta)
+    }
+
+    /// Get the theoretical mean of the distribution at a given time point
+    pub fn mean_at(&self, at: Duration) -> Float {
+        let (alpha, beta) = self.get_parameters_at(at);
+        alpha / (alpha + beta)
+    }
+
+    /// Get the theoretical variance of the distribution at a given time point
+    pub fn variance_at(&self, at: Duration) -> Float {
+        let (alpha, beta) = self.get_parameters_at(at);
+        alpha * beta / ((alpha + beta).powi(2) * (alpha + beta + 1.0))
+    }
 }
 
 impl<Fa, Fb> Distribution for BetaTV<Fa, Fb>
@@ -127,9 +160,7 @@ where
     /// In debug, this function will panic if at the requested time either of the shape parameters is <= 0.
     /// **This is NOT checked in release mode!**
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
-        let alpha = (self.alpha)(at);
-        let beta = (self.beta)(at);
-        debug_assert!(alpha > 0.0 && beta > 0.0, "Invalid alpha {alpha} or beta {beta} bound at {at:?}");
+        let (alpha, beta) = self.get_parameters_at(at);
         let x = MarsagliaTsang::sample(rng, alpha, 1.0);
         let y = MarsagliaTsang::sample(rng, beta, 1.0);
         Duration::from_secs_float(x / (x + y) * self.factor)
@@ -179,16 +210,15 @@ mod tests {
             let mut rng = StdRng::from_os_rng();
             const N: usize = 500_000;
 
-            let samples: Vec<Float> = (0..N)
-                .map(|_| dist.sample_at_t0(&mut rng).as_secs_float())
+            let samples: Vec<Float> = dist.sample_n_at_t0(N, &mut rng)
+                .iter()
+                .map(|d| d.as_secs_float())
                 .collect();
 
             let stats = BasicStatistics::compute(&samples);
-            let expected_mean = alpha / (alpha + beta);
-            let expected_variance = (alpha * beta) / ((alpha + beta).powi(2) * (alpha + beta + 1.0));
 
-            assert_close(stats.mean(), expected_mean, 0.05, "Beta mean");
-            assert_close(stats.variance(), expected_variance, 0.10, "Beta variance");
+            assert_close(stats.mean(), dist.mean(), 0.05, "Beta mean");
+            assert_close(stats.variance(), dist.variance(), 0.10, "Beta variance");
         }
     }
 
@@ -223,31 +253,26 @@ mod tests {
             );
             let mut rng = StdRng::from_os_rng();
             const N: usize = 500_000;
-            let time_points = [0, 5, 10, 20];
 
-            for &t_sec in &time_points {
+            for t_sec in [0, 5, 10, 20] {
                 let t = Duration::from_secs(t_sec);
-                let alpha_t = 1.0 + t.as_secs_float() * 0.5;
-                let beta_t = 2.0 + t.as_secs_float() * 0.5;
 
-                let samples: Vec<Float> = (0..N)
-                    .map(|_| dist.sample(t, &mut rng).as_secs_float())
+                let samples: Vec<Float> = dist.sample_n(N, t, &mut rng)
+                    .iter()
+                    .map(|d| d.as_secs_float())
                     .collect();
 
                 let stats = BasicStatistics::compute(&samples);
-                let expected_mean = alpha_t / (alpha_t + beta_t);
-                let expected_variance =
-                    (alpha_t * beta_t) / ((alpha_t + beta_t).powi(2) * (alpha_t + beta_t + 1.0));
 
                 assert_close(
                     stats.mean(),
-                    expected_mean,
+                    dist.mean_at(t),
                     0.05,
                     &format!("BetaTV mean at t={t_sec}s"),
                 );
                 assert_close(
                     stats.variance(),
-                    expected_variance,
+                    dist.variance_at(t),
                     0.10,
                     &format!("BetaTV variance at t={t_sec}s"),
                 );

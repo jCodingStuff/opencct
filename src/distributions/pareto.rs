@@ -237,7 +237,7 @@ mod tests {
             const N: usize = 500_000;
 
             // test at multiple time points
-            for secs in [0_u64, 5, 10, 20] {
+            for secs in [0, 5, 10, 20] {
                 let t = Duration::from_secs(secs);
                 let samples: Vec<_> = dist.sample_n(N, t, &mut rng)
                     .iter()
