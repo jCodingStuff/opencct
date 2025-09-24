@@ -74,10 +74,14 @@ impl Distribution for Weibull {
 /// use std::time::Duration;
 /// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, WeibullTV};
-/// use opencct::time::{TimeUnit, DurationExtension};
+/// use opencct::time::TimeUnit;
 ///
 /// let mut rng = StdRng::from_os_rng();
-/// let dist = WeibullTV::new(|t| 1.0 + t.as_secs_float() * 0.1, |t| 3.0 + t.as_secs_float() * 0.1, TimeUnit::Seconds);
+/// let dist = WeibullTV::new(
+///     |t| 1.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
+///     |t| 3.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
+///     TimeUnit::Seconds,
+/// );
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
@@ -156,7 +160,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::time::DurationExtension;
     use rand::{rngs::StdRng, SeedableRng};
     use crate::test_utils::{assert_close, BasicStatistics};
 
@@ -169,7 +172,7 @@ mod tests {
             let dist = Weibull::new(2.0, 1.5, TimeUnit::Seconds);
             let mut rng = StdRng::seed_from_u64(42);
             let sample = dist.sample_at_t0(&mut rng);
-            assert!(sample.as_secs_float() >= 0.0);
+            assert!(sample >= Duration::ZERO);
         }
 
         #[test]
@@ -210,7 +213,7 @@ mod tests {
             let dist = WeibullTV::new(|_| 2.0, |_| 1.5, TimeUnit::Seconds);
             let mut rng = StdRng::seed_from_u64(42);
             let sample = dist.sample_at_t0(&mut rng);
-            assert!(sample.as_secs_float() >= 0.0);
+            assert!(sample >= Duration::ZERO);
         }
 
         #[test]
@@ -219,8 +222,8 @@ mod tests {
             const N_SAMPLES: usize = 500_000;
 
             let dist = WeibullTV::new(
-                |t| 0.5 * t.as_secs_float() + 0.1,
-                |t| 0.2 * t.as_secs_float() + 1.0,
+                |t| 0.5 * TimeUnit::Seconds.from_duration(t) + 0.1,
+                |t| 0.2 * TimeUnit::Seconds.from_duration(t) + 1.0,
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();

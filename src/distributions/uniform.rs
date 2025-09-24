@@ -4,7 +4,7 @@ use std::time::Duration;
 use rand::{Rng, RngCore};
 
 use crate::{
-    time::{DurationExtension, TimeUnit},
+    time::TimeUnit,
     Float,
 };
 use super::Distribution;
@@ -71,10 +71,14 @@ impl Distribution for Uniform {
 /// use std::time::Duration;
 /// use rand::{rngs::StdRng, SeedableRng};
 /// use opencct::distributions::{Distribution, UniformTV};
-/// use opencct::time::{TimeUnit, DurationExtension};
+/// use opencct::time::TimeUnit;
 ///
 /// let mut rng = StdRng::from_os_rng();
-/// let dist = UniformTV::new(|t| 1.0 + t.as_secs_float() * 0.1, |t| 3.0 + t.as_secs_float() * 0.1, TimeUnit::Seconds);
+/// let dist = UniformTV::new(
+///     |t| 1.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
+///     |t| 3.0 + TimeUnit::Seconds.from_duration(t) * 0.1,
+///     TimeUnit::Seconds,
+/// );
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
@@ -167,7 +171,7 @@ mod tests {
             let mut rng = StdRng::from_os_rng();
 
             for _ in 0..100 {
-                let sample = dist.sample_at_t0(&mut rng).as_secs_float();
+                let sample = TimeUnit::Seconds.from_duration(dist.sample_at_t0(&mut rng));
                 assert!(
                     sample >= low && sample <= high,
                     "Sample {sample} out of bounds [{low}, {high}]"
@@ -188,36 +192,8 @@ mod tests {
             let mut rng = StdRng::from_os_rng();
 
             for _ in 0..10 {
-                let sample = dist.sample_at_t0(&mut rng).as_secs_float();
+                let sample = TimeUnit::Seconds.from_duration(dist.sample_at_t0(&mut rng));
                 assert_close(sample, value, 0.0, "Uniform constant sample");
-            }
-        }
-
-        #[test]
-        fn time_units() {
-            let base_value = 2.0;
-            let delta = 1.0;
-            let units = [
-                TimeUnit::Days,
-                TimeUnit::Hours,
-                TimeUnit::Minutes,
-                TimeUnit::Seconds,
-                TimeUnit::Millis,
-                TimeUnit::Nanos,
-            ];
-            let mut rng = StdRng::from_os_rng();
-
-            for &unit in &units {
-                let dist = Uniform::new(base_value, base_value + delta, unit);
-                let sample = dist.sample_at_t0(&mut rng).as_secs_float();
-                let factor = unit.factor();
-                assert!(
-                    sample >= base_value * factor && sample <= (base_value + delta) * factor,
-                    "Uniform sample {sample:?} out of expected range [{}, {}] for unit {:?}",
-                    base_value * factor,
-                    (base_value + delta) * factor,
-                    unit
-                );
             }
         }
 
@@ -250,7 +226,7 @@ mod tests {
             let mut rng = StdRng::from_os_rng();
 
             for _ in 0..100 {
-                let sample = dist.sample_at_t0(&mut rng).as_secs_float();
+                let sample = TimeUnit::Seconds.from_duration(dist.sample_at_t0(&mut rng));
                 assert!(
                     sample >= low && sample <= high,
                     "Sample {sample} out of bounds"
@@ -262,22 +238,21 @@ mod tests {
         fn time_dependent_bounds() {
             let offset = 5.0;
             let dist = UniformTV::new(
-                |t| t.as_secs_float() + offset / 2.0,
-                |t| t.as_secs_float() + offset,
+                |t| TimeUnit::Seconds.from_duration(t),
+                |t| TimeUnit::Seconds.from_duration(t) + offset,
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();
 
             for i in 0..5 {
                 let t = Duration::from_secs(i);
-                let sample = dist.sample(t, &mut rng).as_secs_float();
+                let sample = dist.sample(t, &mut rng);
+                let low = TimeUnit::Seconds.to_duration(i as Float);
+                let high = TimeUnit::Seconds.to_duration(i as Float + offset);
                 assert!(
-                    sample >= i as Float && sample <= i as Float + offset,
-                    "At time {:?}, sample {} out of bounds [{}, {}]",
-                    t,
-                    sample,
-                    i as Float,
-                    i as Float + offset
+                    sample >= low && sample <= high,
+                    "At time {:?}, sample {:?} out of bounds [{:?}, {:?}]",
+                    t, sample, low, high,
                 );
             }
         }
@@ -298,36 +273,8 @@ mod tests {
 
             for i in 0..10 {
                 let t = Duration::from_secs(i);
-                let sample = dist.sample(t, &mut rng).as_secs_float();
+                let sample = dist.sample(t, &mut rng);
                 assert_close(sample, value, 0.0, "UniformTV constant sample");
-            }
-        }
-
-        #[test]
-        fn time_units() {
-            let base_value = 2.0;
-            let delta = 1.0;
-            let units = [
-                TimeUnit::Days,
-                TimeUnit::Hours,
-                TimeUnit::Minutes,
-                TimeUnit::Seconds,
-                TimeUnit::Millis,
-                TimeUnit::Nanos,
-            ];
-            let mut rng = StdRng::from_os_rng();
-
-            for &unit in &units {
-                let dist = UniformTV::new(|_| base_value, |_| base_value + delta, unit);
-                let sample = dist.sample(Duration::from_secs(0), &mut rng).as_secs_float();
-                let factor = unit.factor();
-                assert!(
-                    sample >= base_value * factor && sample <= (base_value + delta) * factor,
-                    "UniformTV sample {sample:?} out of expected range [{}, {}] for unit {:?}",
-                    base_value * factor,
-                    (base_value + delta) * factor,
-                    unit
-                );
             }
         }
 
@@ -337,18 +284,15 @@ mod tests {
             const N_SAMPLES: usize = 500_000;
 
             let dist = UniformTV::new(
-                |t| 0.5 * t.as_secs_float() + 0.1,
-                |t| 0.8 * t.as_secs_float() + 1.0,
+                |t| 0.5 * TimeUnit::Seconds.from_duration(t) + 0.1,
+                |t| 0.8 * TimeUnit::Seconds.from_duration(t) + 1.0,
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();
 
             for t_sec in [0, 5, 10] {
                 let t = Duration::from_secs(t_sec);
-                let samples: Vec<Float> = dist.sample_n(N_SAMPLES, t, &mut rng)
-                    .iter()
-                    .map(|d| d.as_secs_float())
-                    .collect();
+                let samples = dist.sample_n(N_SAMPLES, t, &mut rng);
 
                 let stats = BasicStatistics::compute(&samples);
 

@@ -8,7 +8,7 @@
 //! only in `#[cfg(test)]` contexts across different distribution modules.
 
 use std::time::Duration;
-use crate::{time::DurationExtension, Float};
+use crate::{time::TimeUnit, Float};
 
 pub trait ToFloat {
     fn to_float(&self) -> Float;
@@ -19,7 +19,7 @@ impl ToFloat for Float {
 }
 
 impl ToFloat for Duration {
-    fn to_float(&self) -> Float { self.as_secs_float() }
+    fn to_float(&self) -> Float { TimeUnit::Seconds.from_duration(*self) }
 }
 
 /// A simple container for basic population statistics computed from a slice of samples.
