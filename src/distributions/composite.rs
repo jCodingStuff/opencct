@@ -87,17 +87,30 @@ impl Composite {
         );
         Self { distributions }
     }
-}
 
-impl Distribution for Composite {
-    fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
+    /// Get a reference to the active distribution at time `at`.
+    fn get_distribution(&self, at: Duration) -> &dyn Distribution {
         let idx = match self.distributions.binary_search_by(
             |entry| entry.lower_bound.cmp(&at)
         ) {
             Ok(i) => i,
             Err(i) => i - 1,
         };
-        self.distributions[idx].distribution.sample(at, rng)
+        &*self.distributions[idx].distribution
+    }
+}
+
+impl Distribution for Composite {
+    fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
+        self.get_distribution(at).sample(at, rng)
+    }
+
+    fn mean(&self, at: Duration) -> Duration {
+        self.get_distribution(at).mean(at)
+    }
+
+    fn variance(&self, at: Duration) -> Duration {
+        self.get_distribution(at).variance(at)
     }
 }
 
@@ -110,7 +123,9 @@ mod composite_tests {
         exponential::Exponential,
     };
     use crate::time::TimeUnit;
+    use crate::Float;
     use rand::{rngs::StdRng, SeedableRng};
+    use crate::test_utils::{BasicStatistics, assert_close};
 
     fn create_test_composite() -> Composite {
         let distributions = vec![
@@ -144,5 +159,42 @@ mod composite_tests {
             CompositeEntry { lower_bound: Duration::from_secs(10), distribution: Box::new(Uniform::new(1.0, 2.0, TimeUnit::Seconds)) },
             CompositeEntry { lower_bound: Duration::from_secs(5), distribution: Box::new(Uniform::new(1.0, 2.0, TimeUnit::Seconds)) },
         ]);
+    }
+
+    #[test]
+    #[ignore]
+    fn sampling_matches_theoretical_mean_and_variance() {
+        let composite = create_test_composite();
+        let mut rng = StdRng::seed_from_u64(12345);
+
+        fn check_distribution(
+            composite   : &Composite,
+            at          : Duration,
+            rng         : &mut StdRng,
+            n           : usize,
+            tol         : Float,
+        ) {
+            // Draw samples
+            let samples = composite.sample_n(n, at, rng);
+
+            // Compute empirical stats
+            let stats = BasicStatistics::compute(&samples);
+
+            // Assertions with relative tolerance
+            assert_close(stats.mean(), composite.mean(at), tol, &format!("mean at {:?}", at));
+            assert_close(stats.variance(), composite.variance(at), tol, &format!("variance at {:?}", at));
+        }
+
+        let n = 500_000;
+        let tol = 0.05; // allow 5% relative error
+
+        // At 5s → Uniform(1–2s)
+        check_distribution(&composite, Duration::from_secs(5), &mut rng, n, tol);
+
+        // At 15s → Triangular(2–5ms, mode=3ms)
+        check_distribution(&composite, Duration::from_secs(15), &mut rng, n, tol);
+
+        // At 25s → Exponential(mean=1min)
+        check_distribution(&composite, Duration::from_secs(25), &mut rng, n, tol);
     }
 }

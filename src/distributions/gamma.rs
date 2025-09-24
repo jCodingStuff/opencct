@@ -211,7 +211,7 @@ mod tests {
         #[test]
         #[ignore] // statistical test, expensive
         fn mean_and_variance_large_sample() {
-            const N_SAMPLES: usize = 500_000;
+            const N_SAMPLES: usize = 1_000_000;
 
             let alpha = 2.0;
             let theta = 3.0;
@@ -241,7 +241,7 @@ mod tests {
         #[test]
         #[ignore] // statistical test, expensive
         fn mean_and_variance_large_sample_tv() {
-            const N_SAMPLES: usize = 500_000;
+            const N_SAMPLES: usize = 1_000_000;
 
             let dist = GammaErlangTV::new(
                 |t| 0.5 * TimeUnit::Seconds.from(t) + 0.1,
