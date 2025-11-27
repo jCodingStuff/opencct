@@ -196,7 +196,10 @@ mod tests {
             let mut rng = StdRng::from_os_rng();
             for _ in 0..100 {
                 let val = TimeUnit::Seconds.from(dist.sample_at_t0(&mut rng));
-                assert!(val >= 0.0 && val <= 1.0, "Sample {val} should be in [0,1]");
+                assert!(
+                    (0.0..=1.0).contains(&val),
+                    "Sample {val} should be in [0,1]",
+                );
             }
         }
 
@@ -250,8 +253,8 @@ mod tests {
                 let t = Duration::from_secs(i);
                 let val = TimeUnit::Seconds.from(dist.sample(t, &mut rng));
                 assert!(
-                    val >= 0.0 && val <= 1.0,
-                    "Sample {val} not in [0,1] at t={t:?}"
+                    (0.0..=1.0).contains(&val),
+                    "Sample {val} not in [0,1] at t={t:?}",
                 );
             }
         }

@@ -207,7 +207,10 @@ mod tests {
             for _ in 0..10 {
                 let v = TimeUnit::Seconds.from(dist.sample_at_t0(&mut rng));
                 assert!(v.is_finite(), "Sampled value must be finite, got {v}");
-                assert!(v >= 1.0 && v <= 5.0, "Sample {v} out of bounds [1.0, 5.0]");
+                assert!(
+                    (1.0..=5.0).contains(&v),
+                    "Sample {v} out of bounds [1.0, 5.0]"
+                );
             }
         }
 
@@ -270,7 +273,10 @@ mod tests {
             for _ in 0..10 {
                 let v = TimeUnit::Seconds.from(dist.sample_at_t0(&mut rng));
                 assert!(v.is_finite(), "Sampled value must be finite, got {v}");
-                assert!(v >= 1.0 && v <= 5.0, "Sample {v} out of bounds [1.0, 5.0]");
+                assert!(
+                    (1.0..=5.0).contains(&v),
+                    "Sample {v} out of bounds [1.0, 5.0]",
+                );
             }
         }
 
