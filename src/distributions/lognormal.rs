@@ -1,16 +1,10 @@
 //! Log-normal distribution
 
-use std::time::Duration;
 use rand::RngCore;
+use std::time::Duration;
 
-use crate::{
-    time::TimeUnit,
-    Float,
-};
-use super::{
-    Distribution,
-    algorithms::zignor::scaled_zignor_method,
-};
+use super::{Distribution, algorithms::zignor::scaled_zignor_method};
+use crate::{Float, time::TimeUnit};
 
 /// Log-normal distribution.
 ///
@@ -34,11 +28,11 @@ use super::{
 #[derive(Debug, Copy, Clone)]
 pub struct LogNormal {
     /// Logarithm of location
-    mu      : Float,
+    mu: Float,
     /// Logarithm of scale (> 0)
-    sigma   : Float,
+    sigma: Float,
     /// Time unit
-    unit    : TimeUnit,
+    unit: TimeUnit,
 }
 
 impl LogNormal {
@@ -100,17 +94,17 @@ impl Distribution for LogNormal {
 #[derive(Debug, Copy, Clone)]
 pub struct LogNormalTV<FMu, FSigma> {
     /// The logarithm of location function of time
-    mu      : FMu,
+    mu: FMu,
     /// The logarithm of scale as a function of time
-    sigma   : FSigma,
+    sigma: FSigma,
     /// Time unit
-    unit    : TimeUnit,
+    unit: TimeUnit,
 }
 
 impl<FMu, FSigma> LogNormalTV<FMu, FSigma>
 where
-    FMu     : Fn(Duration) -> Float,
-    FSigma  : Fn(Duration) -> Float,
+    FMu: Fn(Duration) -> Float,
+    FSigma: Fn(Duration) -> Float,
 {
     /// Create a new [LogNormalTV] distribution with given parameter functions.
     /// # Arguments
@@ -172,8 +166,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{rngs::StdRng, SeedableRng};
     use crate::test_utils::{BasicStatistics, assert_close};
+    use rand::{SeedableRng, rngs::StdRng};
 
     mod lognormal {
         use super::*;
@@ -213,7 +207,12 @@ mod tests {
             let stats = BasicStatistics::compute(&samples);
 
             assert_close(stats.mean(), dist.mean_at_t0(), 0.05, "LogNormal mean"); // 5% tolerance
-            assert_close(stats.variance(), dist.variance_at_t0(), 0.10, "LogNormal variance"); // 10% tolerance
+            assert_close(
+                stats.variance(),
+                dist.variance_at_t0(),
+                0.10,
+                "LogNormal variance",
+            ); // 10% tolerance
         }
     }
 

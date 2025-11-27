@@ -1,7 +1,7 @@
 //! Module for probability distributions used in call center simulations.
 
-use std::time::Duration;
 use rand::RngCore;
+use std::time::Duration;
 
 /// Trait for probability distributions.
 /// All structs implementing this trait must know that the base unit is seconds.
@@ -13,7 +13,9 @@ pub trait Distribution {
     /// * `at` - the requested time as [Duration]
     /// # Returns
     /// The theoretical mean as [Duration]
-    fn mean(&self, _at: Duration) -> Duration { Duration::ZERO }
+    fn mean(&self, _at: Duration) -> Duration {
+        Duration::ZERO
+    }
 
     /// Get the theoretical mean of the distribution at time 0.
     /// # Returns
@@ -29,7 +31,9 @@ pub trait Distribution {
     /// * `at` - the requested time as [Duration]
     /// # Returns
     /// The theoretical variance as [Duration]
-    fn variance(&self, _at: Duration) -> Duration { Duration::ZERO }
+    fn variance(&self, _at: Duration) -> Duration {
+        Duration::ZERO
+    }
 
     /// Get the theoretical variance of the distribution at time 0.
     /// # Returns
@@ -116,5 +120,5 @@ pub use beta::Beta;
 pub use beta::BetaTV;
 
 pub mod composite;
-pub use composite::CompositeEntry;
 pub use composite::Composite;
+pub use composite::CompositeEntry;

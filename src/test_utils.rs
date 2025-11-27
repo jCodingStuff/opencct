@@ -7,19 +7,23 @@
 //! These utilities are not intended for use in production code but
 //! only in `#[cfg(test)]` contexts across different distribution modules.
 
+use crate::{Float, time::TimeUnit};
 use std::time::Duration;
-use crate::{time::TimeUnit, Float};
 
 pub trait ToFloat {
     fn to_float(&self) -> Float;
 }
 
 impl ToFloat for Float {
-    fn to_float(&self) -> Float { *self }
+    fn to_float(&self) -> Float {
+        *self
+    }
 }
 
 impl ToFloat for Duration {
-    fn to_float(&self) -> Float { TimeUnit::Seconds.from(*self) }
+    fn to_float(&self) -> Float {
+        TimeUnit::Seconds.from(*self)
+    }
 }
 
 /// A simple container for basic population statistics computed from a slice of samples.
@@ -48,8 +52,8 @@ impl ToFloat for Duration {
 /// assert!((stats.std() - 1.1180).abs() < 1e-4);
 /// ```
 pub struct BasicStatistics {
-    mean        : Float,
-    variance    : Float,
+    mean: Float,
+    variance: Float,
 }
 
 impl BasicStatistics {
@@ -60,20 +64,27 @@ impl BasicStatistics {
     pub fn compute<T: ToFloat>(samples: &[T]) -> Self {
         let values: Vec<Float> = samples.iter().map(|x| x.to_float()).collect();
         let mean = values.iter().sum::<Float>() / values.len() as Float;
-        let variance = values.iter().map(|x| (x - mean).powi(2)).sum::<Float>() / values.len() as Float;
+        let variance =
+            values.iter().map(|x| (x - mean).powi(2)).sum::<Float>() / values.len() as Float;
         Self { mean, variance }
     }
 
     /// Return the mean of the samples.
-    pub fn mean(&self) -> Float { self.mean }
+    pub fn mean(&self) -> Float {
+        self.mean
+    }
 
     /// Return the variance of the samples.
-    pub fn variance(&self) -> Float { self.variance }
+    pub fn variance(&self) -> Float {
+        self.variance
+    }
 
     /// Return the standard deviation of the samples.
     ///
     /// Computed as the square root of the population variance.
-    pub fn std(&self) -> Float { self.variance.sqrt() }
+    pub fn std(&self) -> Float {
+        self.variance.sqrt()
+    }
 }
 
 /// Assert that two floating-point values are approximately equal within
@@ -104,7 +115,9 @@ where
     assert!(
         (actual.to_float() - expected.to_float()).abs() <= expected.to_float() * tolerance,
         "{} {} outside tolerance of expected {}",
-        label, actual.to_float(), expected.to_float(),
+        label,
+        actual.to_float(),
+        expected.to_float(),
     );
 }
 

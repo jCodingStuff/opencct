@@ -1,16 +1,10 @@
 //! Beta distribution
 
-use std::{time::Duration};
 use rand::RngCore;
+use std::time::Duration;
 
-use crate::{
-    time::TimeUnit,
-    Float,
-};
-use super::{
-    Distribution,
-    algorithms::marsaglia_tsang::MarsagliaTsang,
-};
+use super::{Distribution, algorithms::marsaglia_tsang::MarsagliaTsang};
+use crate::{Float, time::TimeUnit};
 
 /// Beta distribution.
 ///
@@ -34,15 +28,15 @@ use super::{
 #[derive(Debug, Copy, Clone)]
 pub struct Beta {
     /// Shape parameter
-    alpha           : Float,
+    alpha: Float,
     /// Shape parameter
-    beta            : Float,
+    beta: Float,
     /// Time unit
-    unit            : TimeUnit,
+    unit: TimeUnit,
     /// Sampling method struct for alpha
-    method_alpha    : MarsagliaTsang,
+    method_alpha: MarsagliaTsang,
     /// Sampling method struct for beta
-    method_beta     : MarsagliaTsang,
+    method_beta: MarsagliaTsang,
 }
 
 impl Beta {
@@ -56,13 +50,16 @@ impl Beta {
     /// # Panic
     /// This function panics if either `alpha` or `beta` are <= 0
     pub fn new(alpha: Float, beta: Float, unit: TimeUnit) -> Self {
-        assert!(alpha > 0.0 && beta > 0.0, "Invalid alpha {alpha} or beta {beta}");
+        assert!(
+            alpha > 0.0 && beta > 0.0,
+            "Invalid alpha {alpha} or beta {beta}"
+        );
         Self {
             alpha,
             beta,
             unit,
-            method_alpha    : MarsagliaTsang::setup(alpha),
-            method_beta     : MarsagliaTsang::setup(beta),
+            method_alpha: MarsagliaTsang::setup(alpha),
+            method_beta: MarsagliaTsang::setup(beta),
         }
     }
 }
@@ -80,7 +77,8 @@ impl Distribution for Beta {
 
     fn variance(&self, _: Duration) -> Duration {
         self.unit.to2(
-            self.alpha * self.beta / ((self.alpha + self.beta).powi(2) * (self.alpha + self.beta + 1.0))
+            self.alpha * self.beta
+                / ((self.alpha + self.beta).powi(2) * (self.alpha + self.beta + 1.0)),
         )
     }
 }
@@ -111,11 +109,11 @@ impl Distribution for Beta {
 #[derive(Debug, Copy, Clone)]
 pub struct BetaTV<Fa, Fb> {
     /// Shape parameter
-    alpha   : Fa,
+    alpha: Fa,
     /// Shape parameter
-    beta    : Fb,
+    beta: Fb,
     /// Time unit
-    unit    : TimeUnit,
+    unit: TimeUnit,
 }
 
 impl<Fa, Fb> BetaTV<Fa, Fb>
@@ -139,7 +137,10 @@ where
     /// Get the parameters (alpha, beta) of the distribution at a given point in time
     fn get_parameters_at(&self, at: Duration) -> (Float, Float) {
         let (alpha, beta) = ((self.alpha)(at), (self.beta)(at));
-        debug_assert!(alpha > 0.0 && beta > 0.0, "Invalid alpha {alpha} or beta {beta} bound at {at:?}");
+        debug_assert!(
+            alpha > 0.0 && beta > 0.0,
+            "Invalid alpha {alpha} or beta {beta} bound at {at:?}"
+        );
         (alpha, beta)
     }
 }
@@ -175,15 +176,16 @@ where
     /// **This is NOT checked in release mode!**
     fn variance(&self, at: Duration) -> Duration {
         let (alpha, beta) = self.get_parameters_at(at);
-        self.unit.to2(alpha * beta / ((alpha + beta).powi(2) * (alpha + beta + 1.0)))
+        self.unit
+            .to2(alpha * beta / ((alpha + beta).powi(2) * (alpha + beta + 1.0)))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{rngs::StdRng, SeedableRng};
     use crate::test_utils::{BasicStatistics, assert_close};
+    use rand::{SeedableRng, rngs::StdRng};
 
     mod beta {
         use super::*;
@@ -194,10 +196,7 @@ mod tests {
             let mut rng = StdRng::from_os_rng();
             for _ in 0..100 {
                 let val = TimeUnit::Seconds.from(dist.sample_at_t0(&mut rng));
-                assert!(
-                    val >= 0.0 && val <= 1.0,
-                    "Sample {val} should be in [0,1]"
-                );
+                assert!(val >= 0.0 && val <= 1.0, "Sample {val} should be in [0,1]");
             }
         }
 
@@ -227,7 +226,12 @@ mod tests {
             let stats = BasicStatistics::compute(&samples);
 
             assert_close(stats.mean(), dist.mean_at_t0(), 0.05, "Beta mean");
-            assert_close(stats.variance(), dist.variance_at_t0(), 0.10, "Beta variance");
+            assert_close(
+                stats.variance(),
+                dist.variance_at_t0(),
+                0.10,
+                "Beta variance",
+            );
         }
     }
 

@@ -5,18 +5,15 @@
 
 use rand::Rng;
 
+use super::{inv_sqrt, zignor::zignor_method};
 use crate::Float;
-use super::{
-    zignor::zignor_method,
-    inv_sqrt,
-};
 
 /// Marsaglia-Tsang Method struct
 #[derive(Debug, Copy, Clone)]
 pub struct MarsagliaTsang {
-    alpha   : Float,
-    d       : Float,
-    c       : Float,
+    alpha: Float,
+    d: Float,
+    c: Float,
 }
 
 impl MarsagliaTsang {
@@ -27,7 +24,11 @@ impl MarsagliaTsang {
     /// A new [MarsagliaTsang]
     pub fn setup(alpha: Float) -> Self {
         let d = if alpha < 1.0 { 1.0 } else { 0.0 } + alpha - 1.0 / 3.0;
-        Self { alpha, d, c: inv_sqrt(9.0*d) }
+        Self {
+            alpha,
+            d,
+            c: inv_sqrt(9.0 * d),
+        }
     }
 
     /// Perform the Marsaglia-Tsang Method from an existing [MarsagliaTsang]
@@ -49,9 +50,17 @@ impl MarsagliaTsang {
             v = v * v * v;
             u = rng.random::<Float>();
 
-            if u < 1.0 - 0.0331 * x * x * x * x || u.ln() < 0.5 * x * x + self.d * (1.0 - v + v.ln()) {
-                return theta * self.d * v
-                    * if self.alpha < 1.0 { rng.random::<Float>().powf(1.0 / self.alpha) } else { 1.0 };
+            if u < 1.0 - 0.0331 * x * x * x * x
+                || u.ln() < 0.5 * x * x + self.d * (1.0 - v + v.ln())
+            {
+                return theta
+                    * self.d
+                    * v
+                    * if self.alpha < 1.0 {
+                        rng.random::<Float>().powf(1.0 / self.alpha)
+                    } else {
+                        1.0
+                    };
             }
         }
     }
@@ -193,7 +202,10 @@ mod tests {
         for _ in 0..100 {
             let x1 = MarsagliaTsang::sample(&mut rng1, alpha, theta);
             let x2 = setup.sample_from_setup(&mut rng2, theta);
-            assert_eq!(x1, x2, "sample and sample_from_setup should produce identical values with same seed");
+            assert_eq!(
+                x1, x2,
+                "sample and sample_from_setup should produce identical values with same seed"
+            );
         }
     }
 }

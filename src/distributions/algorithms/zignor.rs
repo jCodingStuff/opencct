@@ -3,8 +3,8 @@
 //! [An Improved Ziggurat Method to Generate Normal Random Samples](https://www.doornik.com/research/ziggurat.pdf).
 //! University of Oxford.
 
-use rand::Rng;
 use once_cell::sync::Lazy;
+use rand::Rng;
 
 use crate::Float;
 
@@ -28,19 +28,22 @@ impl ZignorTables {
         let (mut s_ad_zig_x, mut s_ad_zig_r) = ([0.0; ZIGNOR_C + 1], [0.0; ZIGNOR_C]);
 
         let mut f = (-0.5 * ZIGNOR_R * ZIGNOR_R).exp();
-        s_ad_zig_x[0] = ZIGNOR_V / f;  // [0] is bottom block: V / f(R)
+        s_ad_zig_x[0] = ZIGNOR_V / f; // [0] is bottom block: V / f(R)
         s_ad_zig_x[1] = ZIGNOR_R;
         // s_ad_zig_x[ZIGNOR_C] = 0.0;  // Not needed since everything is initialized to 0
 
         for i in 2..ZIGNOR_C {
-            s_ad_zig_x[i] = (-2.0 * (ZIGNOR_V / s_ad_zig_x[i-1] + f).ln()).sqrt();
+            s_ad_zig_x[i] = (-2.0 * (ZIGNOR_V / s_ad_zig_x[i - 1] + f).ln()).sqrt();
             f = (-0.5 * s_ad_zig_x[i] * s_ad_zig_x[i]).exp();
         }
         for i in 0..ZIGNOR_C {
-            s_ad_zig_r[i] = s_ad_zig_x[i+1] / s_ad_zig_x[i];
+            s_ad_zig_r[i] = s_ad_zig_x[i + 1] / s_ad_zig_x[i];
         }
 
-        Self { s_ad_zig_x, s_ad_zig_r }
+        Self {
+            s_ad_zig_x,
+            s_ad_zig_r,
+        }
     }
 }
 
@@ -54,7 +57,7 @@ fn normal_tail<R: Rng + ?Sized>(rng: &mut R, min: Float, negative: bool) -> Floa
         x = rng.random::<Float>().ln() / min;
         y = rng.random::<Float>().ln();
     }
-    return if negative { x - min } else { min - x };
+    if negative { x - min } else { min - x }
 }
 
 /// Zignor Method
@@ -79,7 +82,7 @@ pub fn zignor_method<R: Rng + ?Sized>(rng: &mut R) -> Float {
             return normal_tail(rng, ZIGNOR_R, u < 0.0);
         }
 
-        let s_ad_zig_x_ip1 = ZIGNOR_TABLES.s_ad_zig_x[i+1];
+        let s_ad_zig_x_ip1 = ZIGNOR_TABLES.s_ad_zig_x[i + 1];
 
         // Is this a sample from the wedges?
         let x = u * s_ad_zig_x_i;

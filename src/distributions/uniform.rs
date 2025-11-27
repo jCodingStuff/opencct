@@ -1,13 +1,10 @@
 //! Uniform distribution
 
-use std::time::Duration;
 use rand::{Rng, RngCore};
+use std::time::Duration;
 
-use crate::{
-    time::TimeUnit,
-    Float,
-};
 use super::Distribution;
+use crate::{Float, time::TimeUnit};
 
 /// Uniform distribution.
 /// # Example
@@ -25,11 +22,11 @@ use super::Distribution;
 #[derive(Debug, Copy, Clone)]
 pub struct Uniform {
     /// Minimum value
-    min     : Float,
+    min: Float,
     /// Maximum value
-    max     : Float,
+    max: Float,
     /// Time unit
-    unit    : TimeUnit,
+    unit: TimeUnit,
 }
 
 impl Uniform {
@@ -85,11 +82,11 @@ impl Distribution for Uniform {
 #[derive(Debug, Copy, Clone)]
 pub struct UniformTV<FMin, FMax> {
     /// Minimum value as a function of time
-    min     : FMin,
+    min: FMin,
     /// Maximum value as a function of time
-    max     : FMax,
+    max: FMax,
     /// Time unit
-    unit    : TimeUnit,
+    unit: TimeUnit,
 }
 
 impl<FMin, FMax> UniformTV<FMin, FMax>
@@ -113,7 +110,10 @@ where
     /// Get the bounds (min, max) of the distribution at a given point in time
     fn get_bounds_at(&self, at: Duration) -> (Float, Float) {
         let (min, max) = ((self.min)(at), (self.max)(at));
-        debug_assert!(min <= max && min >= 0.0, "Invalid bound at {at:?}: [{min}, {max}]");
+        debug_assert!(
+            min <= max && min >= 0.0,
+            "Invalid bound at {at:?}: [{min}, {max}]"
+        );
         (min, max)
     }
 }
@@ -157,8 +157,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{rngs::StdRng, SeedableRng};
     use crate::test_utils::{BasicStatistics, assert_close};
+    use rand::{SeedableRng, rngs::StdRng};
 
     mod uniform {
         use super::*;
@@ -211,7 +211,12 @@ mod tests {
             let stats = BasicStatistics::compute(&samples);
 
             assert_close(stats.mean(), dist.mean_at_t0(), 0.01, "Uniform mean");
-            assert_close(stats.variance(), dist.variance_at_t0(), 0.02, "Uniform variance");
+            assert_close(
+                stats.variance(),
+                dist.variance_at_t0(),
+                0.02,
+                "Uniform variance",
+            );
         }
     }
 
@@ -252,7 +257,10 @@ mod tests {
                 assert!(
                     sample >= low && sample <= high,
                     "At time {:?}, sample {:?} out of bounds [{:?}, {:?}]",
-                    t, sample, low, high,
+                    t,
+                    sample,
+                    low,
+                    high,
                 );
             }
         }

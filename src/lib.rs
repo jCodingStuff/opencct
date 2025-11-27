@@ -4,7 +4,7 @@
 ///
 /// Currently set to `f64` for performance and precision.
 /// Can be changed later if needed (e.g., `f32` or `Decimal`).
-#[cfg(feature = "f32")]
+#[cfg(all(feature = "f32", not(feature = "f64")))]
 pub type Float = f32;
 
 /// The numeric type used throughout opencct.
@@ -22,3 +22,5 @@ pub mod time;
 pub use time::TimeUnit;
 
 pub mod math;
+
+pub mod simulation;

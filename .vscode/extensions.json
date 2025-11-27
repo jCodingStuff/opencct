@@ -1,0 +1,21 @@
+{
+  "recommendations": [
+    // Rust language support
+    "rust-lang.rust-analyzer",
+
+    // TOML syntax support (for Cargo.toml)
+    "tamasfe.even-better-toml",
+
+    // Crates.io integration (shows latest versions in Cargo.toml)
+    "serayuzgur.crates",
+
+    // EditorConfig support
+    "editorconfig.editorconfig",
+
+    // Error Lens (inline error messages)
+    "usernamehw.errorlens",
+
+    // GitLens (enhanced git features)
+    "eamodio.gitlens"
+  ]
+}

@@ -1,7 +1,7 @@
 //! Composite distribution
 
-use std::time::Duration;
 use rand::RngCore;
+use std::time::Duration;
 
 use super::Distribution;
 
@@ -9,9 +9,9 @@ use super::Distribution;
 /// Associates a lower bound in simulation time with a probability distribution.
 pub struct CompositeEntry {
     /// The lower bound time at which this distribution becomes active.
-    pub lower_bound     : Duration,
+    pub lower_bound: Duration,
     /// The distribution active starting at this lower bound.
-    pub distribution    : Box<dyn Distribution>,
+    pub distribution: Box<dyn Distribution>,
 }
 
 /// A composite distribution.
@@ -80,9 +80,14 @@ impl Composite {
     /// - `distributions` is empty
     /// - `distributions` is not sorted by strictly ascending `lower_bound`
     pub fn new(distributions: Vec<CompositeEntry>) -> Self {
-        assert!(!distributions.is_empty(), "There are no distributions in the slice!");
         assert!(
-            distributions.windows(2).all(|w| w[0].lower_bound < w[1].lower_bound),
+            !distributions.is_empty(),
+            "There are no distributions in the slice!"
+        );
+        assert!(
+            distributions
+                .windows(2)
+                .all(|w| w[0].lower_bound < w[1].lower_bound),
             "The distributions slice is not sorted by ascending lower_bound or a given lower_bound is duplicated",
         );
         Self { distributions }
@@ -90,9 +95,10 @@ impl Composite {
 
     /// Get a reference to the active distribution at time `at`.
     fn get_distribution(&self, at: Duration) -> &dyn Distribution {
-        let idx = match self.distributions.binary_search_by(
-            |entry| entry.lower_bound.cmp(&at)
-        ) {
+        let idx = match self
+            .distributions
+            .binary_search_by(|entry| entry.lower_bound.cmp(&at))
+        {
             Ok(i) => i,
             Err(i) => i - 1,
         };
@@ -117,15 +123,13 @@ impl Distribution for Composite {
 #[cfg(test)]
 mod composite_tests {
     use super::*;
-    use crate::distributions::{
-        uniform::Uniform,
-        triangular::Triangular,
-        exponential::Exponential,
-    };
-    use crate::time::TimeUnit;
     use crate::Float;
-    use rand::{rngs::StdRng, SeedableRng};
+    use crate::distributions::{
+        exponential::Exponential, triangular::Triangular, uniform::Uniform,
+    };
     use crate::test_utils::{BasicStatistics, assert_close};
+    use crate::time::TimeUnit;
+    use rand::{SeedableRng, rngs::StdRng};
 
     fn create_test_composite() -> Composite {
         let distributions = vec![
@@ -156,8 +160,14 @@ mod composite_tests {
     #[should_panic]
     fn constructor_panics_on_unsorted_lower_bounds() {
         let _ = Composite::new(vec![
-            CompositeEntry { lower_bound: Duration::from_secs(10), distribution: Box::new(Uniform::new(1.0, 2.0, TimeUnit::Seconds)) },
-            CompositeEntry { lower_bound: Duration::from_secs(5), distribution: Box::new(Uniform::new(1.0, 2.0, TimeUnit::Seconds)) },
+            CompositeEntry {
+                lower_bound: Duration::from_secs(10),
+                distribution: Box::new(Uniform::new(1.0, 2.0, TimeUnit::Seconds)),
+            },
+            CompositeEntry {
+                lower_bound: Duration::from_secs(5),
+                distribution: Box::new(Uniform::new(1.0, 2.0, TimeUnit::Seconds)),
+            },
         ]);
     }
 
@@ -168,11 +178,11 @@ mod composite_tests {
         let mut rng = StdRng::seed_from_u64(12345);
 
         fn check_distribution(
-            composite   : &Composite,
-            at          : Duration,
-            rng         : &mut StdRng,
-            n           : usize,
-            tol         : Float,
+            composite: &Composite,
+            at: Duration,
+            rng: &mut StdRng,
+            n: usize,
+            tol: Float,
         ) {
             // Draw samples
             let samples = composite.sample_n(n, at, rng);
@@ -181,8 +191,18 @@ mod composite_tests {
             let stats = BasicStatistics::compute(&samples);
 
             // Assertions with relative tolerance
-            assert_close(stats.mean(), composite.mean(at), tol, &format!("mean at {:?}", at));
-            assert_close(stats.variance(), composite.variance(at), tol, &format!("variance at {:?}", at));
+            assert_close(
+                stats.mean(),
+                composite.mean(at),
+                tol,
+                &format!("mean at {:?}", at),
+            );
+            assert_close(
+                stats.variance(),
+                composite.variance(at),
+                tol,
+                &format!("variance at {:?}", at),
+            );
         }
 
         let n = 500_000;

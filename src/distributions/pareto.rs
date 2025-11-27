@@ -1,13 +1,10 @@
 //! Pareto distribution
 
-use std::time::Duration;
 use rand::{Rng, RngCore};
+use std::time::Duration;
 
-use crate::{
-    time::TimeUnit,
-    Float,
-};
 use super::Distribution;
+use crate::{Float, time::TimeUnit};
 
 /// Pareto distribution.
 ///
@@ -26,11 +23,11 @@ use super::Distribution;
 #[derive(Debug, Copy, Clone)]
 pub struct Pareto {
     /// Scale parameter
-    xm      : Float,
+    xm: Float,
     /// Shape parameter
-    alpha   : Float,
+    alpha: Float,
     /// Time unit
-    unit    : TimeUnit,
+    unit: TimeUnit,
 }
 
 impl Pareto {
@@ -56,7 +53,11 @@ impl Distribution for Pareto {
     }
 
     fn mean(&self, _: Duration) -> Duration {
-        let raw = if self.alpha <= 1.0 { Float::INFINITY } else { self.alpha * self.xm / (self.alpha - 1.0) };
+        let raw = if self.alpha <= 1.0 {
+            Float::INFINITY
+        } else {
+            self.alpha * self.xm / (self.alpha - 1.0)
+        };
         self.unit.to(raw)
     }
 
@@ -91,11 +92,11 @@ impl Distribution for Pareto {
 #[derive(Debug, Copy, Clone)]
 pub struct ParetoTV<Fx, Fa> {
     /// Scale parameter
-    xm      : Fx,
+    xm: Fx,
     /// Shape parameter
-    alpha   : Fa,
+    alpha: Fa,
     /// Time unit
-    unit    : TimeUnit,
+    unit: TimeUnit,
 }
 
 impl<Fx, Fa> ParetoTV<Fx, Fa>
@@ -119,7 +120,10 @@ where
     /// Get the parameters (xm, alpha) of the distribution at a given point in time
     fn get_parameters_at(&self, at: Duration) -> (Float, Float) {
         let (xm, alpha) = ((self.xm)(at), (self.alpha)(at));
-        debug_assert!(xm > 0.0 && alpha > 0.0, "Invalid xm {xm} or alpha {alpha} bound at {at:?}");
+        debug_assert!(
+            xm > 0.0 && alpha > 0.0,
+            "Invalid xm {xm} or alpha {alpha} bound at {at:?}"
+        );
         (xm, alpha)
     }
 }
@@ -145,7 +149,11 @@ where
     /// **This is NOT checked in release mode!**
     fn mean(&self, at: Duration) -> Duration {
         let (xm, alpha) = self.get_parameters_at(at);
-        let raw = if alpha <= 1.0 { Float::INFINITY } else { alpha * xm / (alpha - 1.0) };
+        let raw = if alpha <= 1.0 {
+            Float::INFINITY
+        } else {
+            alpha * xm / (alpha - 1.0)
+        };
         self.unit.to(raw)
     }
 
@@ -167,8 +175,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{rngs::StdRng, SeedableRng};
     use crate::test_utils::{BasicStatistics, assert_close};
+    use rand::{SeedableRng, rngs::StdRng};
 
     mod pareto {
         use super::*;
@@ -208,7 +216,12 @@ mod tests {
             let stats = BasicStatistics::compute(&samples);
 
             assert_close(stats.mean(), dist.mean_at_t0(), 0.05, "Pareto mean");
-            assert_close(stats.variance(), dist.variance_at_t0(), 0.10, "Pareto variance");
+            assert_close(
+                stats.variance(),
+                dist.variance_at_t0(),
+                0.10,
+                "Pareto variance",
+            );
         }
     }
 
@@ -218,7 +231,7 @@ mod tests {
         #[test]
         fn samples_positive() {
             let dist = ParetoTV::new(
-                |t| 1.0 + t.as_secs_f64() * 0.1,
+                |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
                 |_| 2.0,
                 TimeUnit::Seconds,
             );
@@ -238,7 +251,7 @@ mod tests {
         #[ignore]
         fn mean_and_variance_time_varying() {
             let dist = ParetoTV::new(
-                |t| 1.0 + t.as_secs_f64() * 0.2,
+                |t| 1.0 + TimeUnit::Seconds.from(t) * 0.2,
                 |_| 3.0,
                 TimeUnit::Seconds,
             );

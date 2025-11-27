@@ -2,17 +2,11 @@
 //!
 //! Erlang is just a Gamma with an integer shape parameter
 
-use std::time::Duration;
 use rand::RngCore;
+use std::time::Duration;
 
-use crate::{
-    time::TimeUnit,
-    Float,
-};
-use super::{
-    Distribution,
-    algorithms::marsaglia_tsang::MarsagliaTsang,
-};
+use super::{Distribution, algorithms::marsaglia_tsang::MarsagliaTsang};
+use crate::{Float, time::TimeUnit};
 
 /// Gamma-Erlang distribution.
 ///
@@ -36,13 +30,13 @@ use super::{
 #[derive(Debug, Copy, Clone)]
 pub struct GammaErlang {
     /// Shape parameter
-    alpha   : Float,
+    alpha: Float,
     /// Scale parameter
-    theta   : Float,
+    theta: Float,
     /// Time unit
-    unit    : TimeUnit,
+    unit: TimeUnit,
     /// Sampling method struct
-    method  : MarsagliaTsang,
+    method: MarsagliaTsang,
 }
 
 impl GammaErlang {
@@ -56,8 +50,16 @@ impl GammaErlang {
     /// # Panic
     /// This function panics if either `alpha` or `theta` are <= 0
     pub fn new(alpha: Float, theta: Float, unit: TimeUnit) -> Self {
-        assert!(alpha > 0.0 && theta > 0.0, "Invalid alpha {alpha} or theta {theta}");
-        Self { alpha, theta, unit, method: MarsagliaTsang::setup(alpha) }
+        assert!(
+            alpha > 0.0 && theta > 0.0,
+            "Invalid alpha {alpha} or theta {theta}"
+        );
+        Self {
+            alpha,
+            theta,
+            unit,
+            method: MarsagliaTsang::setup(alpha),
+        }
     }
 }
 
@@ -102,11 +104,11 @@ impl Distribution for GammaErlang {
 #[derive(Debug, Copy, Clone)]
 pub struct GammaErlangTV<Fa, Fb> {
     /// Shape parameter as a function of time
-    alpha   : Fa,
+    alpha: Fa,
     /// Scale parameter as a function of time
-    theta   : Fb,
+    theta: Fb,
     /// Time unit
-    unit    : TimeUnit,
+    unit: TimeUnit,
 }
 
 impl<Fa, Fb> GammaErlangTV<Fa, Fb>
@@ -130,7 +132,10 @@ where
     /// Get the parameters (alpha, theta) of the distribution at a given point in time
     fn get_parameters_at(&self, at: Duration) -> (Float, Float) {
         let (alpha, theta) = ((self.alpha)(at), (self.theta)(at));
-        debug_assert!(alpha > 0.0 && theta > 0.0, "Invalid alpha {alpha} or theta {theta} bound at {at:?}");
+        debug_assert!(
+            alpha > 0.0 && theta > 0.0,
+            "Invalid alpha {alpha} or theta {theta} bound at {at:?}"
+        );
         (alpha, theta)
     }
 }
@@ -172,8 +177,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{rngs::StdRng, SeedableRng};
     use crate::test_utils::{BasicStatistics, assert_close};
+    use rand::{SeedableRng, rngs::StdRng};
 
     mod gamma_erlang {
         use super::*;
@@ -223,7 +228,12 @@ mod tests {
             let stats = BasicStatistics::compute(&samples);
 
             assert_close(stats.mean(), dist.mean_at_t0(), 0.01, "GammaErlang mean"); // 1% tolerance
-            assert_close(stats.variance(), dist.variance_at_t0(), 0.02, "GammaErlang variance"); // 2% tolerance
+            assert_close(
+                stats.variance(),
+                dist.variance_at_t0(),
+                0.02,
+                "GammaErlang variance",
+            ); // 2% tolerance
         }
     }
 

@@ -21,12 +21,12 @@ impl TimeUnit {
     /// The unit factor as a [Float]
     pub fn factor(&self) -> Float {
         match self {
-            TimeUnit::Days      => 86400.0,
-            TimeUnit::Hours     => 3600.0,
-            TimeUnit::Minutes   => 60.0,
-            TimeUnit::Seconds   => 1.0,
-            TimeUnit::Millis    => 1e-3,
-            TimeUnit::Nanos     => 1e-9,
+            TimeUnit::Days => 86400.0,
+            TimeUnit::Hours => 3600.0,
+            TimeUnit::Minutes => 60.0,
+            TimeUnit::Seconds => 1.0,
+            TimeUnit::Millis => 1e-3,
+            TimeUnit::Nanos => 1e-9,
         }
     }
 
@@ -36,11 +36,15 @@ impl TimeUnit {
     /// # Returns
     /// A new [Duration]
     pub fn to(&self, value: Float) -> Duration {
-        #[cfg(feature = "f32")]
-        { Duration::from_secs_32(value * self.factor()) }
+        #[cfg(all(feature = "f32", not(feature = "f64")))]
+        {
+            Duration::from_secs_f32(value * self.factor())
+        }
 
         #[cfg(feature = "f64")]
-        { Duration::from_secs_f64(value * self.factor()) }
+        {
+            Duration::from_secs_f64(value * self.factor())
+        }
     }
 
     /// Convert a value to a [Duration] squared (the unit squared)
@@ -49,11 +53,15 @@ impl TimeUnit {
     /// # Returns
     /// A new [Duration]
     pub fn to2(&self, value: Float) -> Duration {
-        #[cfg(feature = "f32")]
-        { Duration::from_secs_32(value * self.factor().powi(2)) }
+        #[cfg(all(feature = "f32", not(feature = "f64")))]
+        {
+            Duration::from_secs_f32(value * self.factor().powi(2))
+        }
 
         #[cfg(feature = "f64")]
-        { Duration::from_secs_f64(value * self.factor().powi(2)) }
+        {
+            Duration::from_secs_f64(value * self.factor().powi(2))
+        }
     }
 
     /// Convert a [Duration] to a [Float] value
@@ -62,14 +70,17 @@ impl TimeUnit {
     /// # Returns
     /// The value interpreted by the unit as [Float]
     pub fn from(&self, d: Duration) -> Float {
-        #[cfg(feature = "f32")]
-        { d.as_secs_f32() / self.factor() }
+        #[cfg(all(feature = "f32", not(feature = "f64")))]
+        {
+            d.as_secs_f32() / self.factor()
+        }
 
         #[cfg(feature = "f64")]
-        { d.as_secs_f64() / self.factor() }
+        {
+            d.as_secs_f64() / self.factor()
+        }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -123,7 +134,10 @@ mod tests {
         let value: Float = 1000.0; // ~1000 days
         let d = unit.to(value);
         let back: Float = unit.from(d);
-        assert!((back - value).abs() < 1e-6, "large roundtrip failed: {value} vs {back}");
+        assert!(
+            (back - value).abs() < 1e-6,
+            "large roundtrip failed: {value} vs {back}"
+        );
     }
 
     #[test]
@@ -132,7 +146,10 @@ mod tests {
         let value: Float = 1.5; // 1.5 ms
         let d = unit.to(value);
         let back: Float = unit.from(d);
-        assert!((back - value).abs() < 1e-9, "fractional millis roundtrip failed: {value} vs {back}");
+        assert!(
+            (back - value).abs() < 1e-9,
+            "fractional millis roundtrip failed: {value} vs {back}"
+        );
     }
 
     #[test]
@@ -141,6 +158,9 @@ mod tests {
         let value: Float = 2500.0; // 2500 ns = 2.5 μs
         let d = unit.to(value);
         let back: Float = unit.from(d);
-        assert!((back - value).abs() < 1e-9, "fractional nanos roundtrip failed: {value} vs {back}");
+        assert!(
+            (back - value).abs() < 1e-9,
+            "fractional nanos roundtrip failed: {value} vs {back}"
+        );
     }
 }

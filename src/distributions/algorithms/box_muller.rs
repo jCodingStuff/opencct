@@ -4,7 +4,7 @@
 //! *The annals of mathematical statistics*, 29(2), 610-611.
 
 use rand::Rng;
-use std::f64::consts::{SQRT_2, PI};
+use std::f64::consts::{PI, SQRT_2};
 
 use crate::Float;
 
@@ -27,7 +27,11 @@ pub fn box_muller_transform<R: Rng + ?Sized>(rng: &mut R) -> (Float, Float) {
 /// * `sigma` - Standard deviation of the desired normal distribution
 /// # Returns
 /// Two random variables that have the normal distribution with mean `mu` and standard deviation `sigma`
-pub fn scaled_box_muller_transform<R: Rng + ?Sized>(rng: &mut R, mu: Float, sigma: Float) -> (Float, Float) {
+pub fn scaled_box_muller_transform<R: Rng + ?Sized>(
+    rng: &mut R,
+    mu: Float,
+    sigma: Float,
+) -> (Float, Float) {
     let (x, y) = box_muller_transform(rng);
     (mu + sigma * x, mu + sigma * y)
 }
@@ -73,8 +77,8 @@ mod box_muller_tests {
         let mut rng = StdRng::seed_from_u64(999);
 
         let n_samples = 100_000;
-        let mut sum = 0.0;
-        let mut sum_sq = 0.0;
+        let mut sum: Float = 0.0;
+        let mut sum_sq: Float = 0.0;
 
         for _ in 0..n_samples {
             let (x, _) = scaled_box_muller_transform(&mut rng, mu, sigma);
@@ -82,8 +86,8 @@ mod box_muller_tests {
             sum_sq += x * x;
         }
 
-        let mean = sum / n_samples as f64;
-        let variance = sum_sq / n_samples as f64 - mean.powi(2);
+        let mean = sum / n_samples as Float;
+        let variance = sum_sq / n_samples as Float - mean.powi(2);
 
         let mean_error = (mean - mu).abs() / mu.abs();
         let variance_error = (variance - sigma * sigma).abs() / (sigma * sigma);

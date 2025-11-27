@@ -1,16 +1,10 @@
 //! Normal distribution
 
-use std::time::Duration;
 use rand::RngCore;
+use std::time::Duration;
 
-use crate::{
-    time::TimeUnit,
-    Float,
-};
-use super::{
-    Distribution,
-    algorithms::zignor::scaled_zignor_method,
-};
+use super::{Distribution, algorithms::zignor::scaled_zignor_method};
+use crate::{Float, time::TimeUnit};
 
 /// Normal distribution. Since in the current context, negative time does not make sense, the negative values
 /// will be clamped to 0.
@@ -35,11 +29,11 @@ use super::{
 #[derive(Debug, Copy, Clone)]
 pub struct Normal {
     /// The mean (>= 0)
-    mu      : Float,
+    mu: Float,
     /// The standard deviation (> 0)
-    sigma   : Float,
+    sigma: Float,
     /// Time unit
-    unit    : TimeUnit,
+    unit: TimeUnit,
 }
 
 impl Normal {
@@ -64,9 +58,13 @@ impl Distribution for Normal {
         self.unit.to(raw.max(0.0))
     }
 
-    fn mean(&self, _: Duration) -> Duration { self.unit.to(self.mu) }
+    fn mean(&self, _: Duration) -> Duration {
+        self.unit.to(self.mu)
+    }
 
-    fn variance(&self, _: Duration) -> Duration { self.unit.to2(self.sigma.powi(2)) }
+    fn variance(&self, _: Duration) -> Duration {
+        self.unit.to2(self.sigma.powi(2))
+    }
 }
 
 /// Normal distribution with time-varying parmeters. Since in the current context,
@@ -96,17 +94,17 @@ impl Distribution for Normal {
 #[derive(Debug, Copy, Clone)]
 pub struct NormalTV<FMu, FSigma> {
     /// The mean as a function of time
-    mu      : FMu,
+    mu: FMu,
     /// The standard deviation as a function of time
-    sigma   : FSigma,
+    sigma: FSigma,
     /// Time unit
-    unit    : TimeUnit,
+    unit: TimeUnit,
 }
 
 impl<FMu, FSigma> NormalTV<FMu, FSigma>
 where
-    FMu     : Fn(Duration) -> Float,
-    FSigma  : Fn(Duration) -> Float,
+    FMu: Fn(Duration) -> Float,
+    FSigma: Fn(Duration) -> Float,
 {
     /// Create a new [NormalTV] distribution with given mean and standard deviation functions.
     /// # Arguments
@@ -164,8 +162,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{rngs::StdRng, SeedableRng};
     use crate::test_utils::{BasicStatistics, assert_close};
+    use rand::{SeedableRng, rngs::StdRng};
 
     mod normal {
         use super::*;
@@ -177,7 +175,10 @@ mod tests {
 
             for _ in 0..100 {
                 let sample = dist.sample_at_t0(&mut rng);
-                assert!(sample >= Duration::ZERO, "Normal sample should be >= 0, got {sample:?}");
+                assert!(
+                    sample >= Duration::ZERO,
+                    "Normal sample should be >= 0, got {sample:?}"
+                );
             }
         }
 
@@ -200,8 +201,13 @@ mod tests {
 
             let stats = BasicStatistics::compute(&samples);
 
-            assert_close(stats.mean(), dist.mean_at_t0(), 0.01, "Normal mean");      // 1% tolerance
-            assert_close(stats.variance(), dist.variance_at_t0(), 0.02, "Normal variance"); // 2% tolerance
+            assert_close(stats.mean(), dist.mean_at_t0(), 0.01, "Normal mean"); // 1% tolerance
+            assert_close(
+                stats.variance(),
+                dist.variance_at_t0(),
+                0.02,
+                "Normal variance",
+            ); // 2% tolerance
         }
     }
 
@@ -220,7 +226,10 @@ mod tests {
             for i in 0..10 {
                 let t = Duration::from_secs(i);
                 let sample = dist.sample(t, &mut rng);
-                assert!(sample >= Duration::ZERO, "NormalTV sample should be >= 0, got {sample:?} at t={t:?}");
+                assert!(
+                    sample >= Duration::ZERO,
+                    "NormalTV sample should be >= 0, got {sample:?} at t={t:?}"
+                );
             }
         }
 
@@ -242,8 +251,18 @@ mod tests {
 
                 let stats = BasicStatistics::compute(&samples);
 
-                assert_close(stats.mean(), dist.mean(t), 0.01, &format!("NormalTV mean at t={t_mill}"));
-                assert_close(stats.variance(), dist.variance(t), 0.02, &format!("NormalTV variance at t={t_mill}"));
+                assert_close(
+                    stats.mean(),
+                    dist.mean(t),
+                    0.01,
+                    &format!("NormalTV mean at t={t_mill}"),
+                );
+                assert_close(
+                    stats.variance(),
+                    dist.variance(t),
+                    0.02,
+                    &format!("NormalTV variance at t={t_mill}"),
+                );
             }
         }
     }

@@ -1,13 +1,10 @@
 //! Exponential distribution
 
-use std::time::Duration;
 use rand::{Rng, RngCore};
+use std::time::Duration;
 
-use crate::{
-    time::TimeUnit,
-    Float,
-};
 use super::Distribution;
+use crate::{Float, time::TimeUnit};
 
 /// Exponential distribution.
 /// # Example
@@ -25,9 +22,9 @@ use super::Distribution;
 #[derive(Debug, Copy, Clone)]
 pub struct Exponential {
     /// The rate parameter (> 0)
-    lambda  : Float,
+    lambda: Float,
     /// Time unit
-    unit    : TimeUnit,
+    unit: TimeUnit,
 }
 
 impl Exponential {
@@ -79,9 +76,9 @@ impl Distribution for Exponential {
 #[derive(Debug, Copy, Clone)]
 pub struct ExponentialTV<F> {
     /// Rate parameter as a function of time
-    lambda   : F,
+    lambda: F,
     /// Time unit
-    unit     : TimeUnit,
+    unit: TimeUnit,
 }
 
 impl<F> ExponentialTV<F>
@@ -142,8 +139,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{rngs::StdRng, SeedableRng};
     use crate::test_utils::{BasicStatistics, assert_close};
+    use rand::{SeedableRng, rngs::StdRng};
 
     mod exponential {
         use super::*;
@@ -187,8 +184,18 @@ mod tests {
 
             let stats = BasicStatistics::compute(&samples);
 
-            assert_close(stats.mean(), dist.mean_at_t0(), MEAN_TOL, "Exponential mean");
-            assert_close(stats.variance(), dist.variance_at_t0(), VAR_TOL, "Exponential variance");
+            assert_close(
+                stats.mean(),
+                dist.mean_at_t0(),
+                MEAN_TOL,
+                "Exponential mean",
+            );
+            assert_close(
+                stats.variance(),
+                dist.variance_at_t0(),
+                VAR_TOL,
+                "Exponential variance",
+            );
         }
     }
 
@@ -197,10 +204,8 @@ mod tests {
 
         #[test]
         fn smoke_sample_tv() {
-            let dist = ExponentialTV::new(
-                |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
-                TimeUnit::Seconds,
-            );
+            let dist =
+                ExponentialTV::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1, TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
             let _ = dist.sample_at_t0(&mut rng);
             let _ = dist.sample(Duration::from_secs(5), &mut rng);
@@ -221,10 +226,8 @@ mod tests {
             const MEAN_TOL: Float = 0.02;
             const VAR_TOL: Float = 0.03;
 
-            let dist = ExponentialTV::new(
-                |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
-                TimeUnit::Seconds,
-            );
+            let dist =
+                ExponentialTV::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1, TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
 
             for t_sec in [0, 5, 10] {

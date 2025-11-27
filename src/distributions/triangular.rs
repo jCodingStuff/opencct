@@ -1,13 +1,10 @@
 //! Triangular distribution
 
-use std::time::Duration;
 use rand::{Rng, RngCore};
+use std::time::Duration;
 
-use crate::{
-    time::TimeUnit,
-    Float,
-};
 use super::Distribution;
+use crate::{Float, time::TimeUnit};
 
 /// Triangular distribution.
 ///
@@ -26,15 +23,15 @@ use super::Distribution;
 #[derive(Debug, Copy, Clone)]
 pub struct Triangular {
     /// Lower limit
-    a       : Float,
+    a: Float,
     /// Upper limit
-    b       : Float,
+    b: Float,
     /// Mode
-    c       : Float,
+    c: Float,
     /// (c-a)/(b-a)
-    fc      : Float,
+    fc: Float,
     /// Time unit
-    unit    : TimeUnit,
+    unit: TimeUnit,
 }
 
 impl Triangular {
@@ -49,8 +46,17 @@ impl Triangular {
     /// # Panic
     /// This function panics if `a < 0` or `c < a` or `b < c` or `b <= a`
     pub fn new(a: Float, b: Float, c: Float, unit: TimeUnit) -> Self {
-        assert!(a >= 0.0 && c >= a && b >= c && b > a, "Invalid parameters [a: {a}, b: {b}, c: {c}]");
-        Self { a, b, c, fc: (c-a)/(b-a), unit }
+        assert!(
+            a >= 0.0 && c >= a && b >= c && b > a,
+            "Invalid parameters [a: {a}, b: {b}, c: {c}]"
+        );
+        Self {
+            a,
+            b,
+            c,
+            fc: (c - a) / (b - a),
+            unit,
+        }
     }
 }
 
@@ -58,9 +64,9 @@ impl Distribution for Triangular {
     fn sample(&self, _: Duration, rng: &mut dyn RngCore) -> Duration {
         let u = rng.random::<Float>();
         let raw = if u < self.fc {
-            self.a + (u*(self.b-self.a)*(self.c-self.a)).sqrt()
+            self.a + (u * (self.b - self.a) * (self.c - self.a)).sqrt()
         } else {
-            self.b - ((1.0-u)*(self.b-self.a)*(self.b-self.c)).sqrt()
+            self.b - ((1.0 - u) * (self.b - self.a) * (self.b - self.c)).sqrt()
         };
         self.unit.to(raw)
     }
@@ -71,10 +77,11 @@ impl Distribution for Triangular {
     }
 
     fn variance(&self, _: Duration) -> Duration {
-        let raw = (
-            self.a.powi(2) + self.b.powi(2) + self.c.powi(2)
-            - self.a * self.b - self.a * self.c - self.b * self.c
-        ) / 18.0;
+        let raw = (self.a.powi(2) + self.b.powi(2) + self.c.powi(2)
+            - self.a * self.b
+            - self.a * self.c
+            - self.b * self.c)
+            / 18.0;
         self.unit.to2(raw)
     }
 }
@@ -101,13 +108,13 @@ impl Distribution for Triangular {
 #[derive(Debug, Copy, Clone)]
 pub struct TriangularTV<Fa, Fb, Fc> {
     /// Lower limit as a function of time
-    a       : Fa,
+    a: Fa,
     /// Upper limit as a function of time
-    b       : Fb,
+    b: Fb,
     /// Mode as a function of time
-    c       : Fc,
+    c: Fc,
     /// Time unit
-    unit    : TimeUnit,
+    unit: TimeUnit,
 }
 
 impl<Fa, Fb, Fc> TriangularTV<Fa, Fb, Fc>
@@ -133,7 +140,10 @@ where
     /// Get the parameters (a, b, c) of the distribution at a given point in time
     fn get_parameters_at(&self, at: Duration) -> (Float, Float, Float) {
         let (a, b, c) = ((self.a)(at), (self.b)(at), (self.c)(at));
-        debug_assert!(a >= 0.0 && c >= a && b >= c && b > a, "At t:{at:?} found invalid parameters [a: {a}, b: {b}, c: {c}]");
+        debug_assert!(
+            a >= 0.0 && c >= a && b >= c && b > a,
+            "At t:{at:?} found invalid parameters [a: {a}, b: {b}, c: {c}]"
+        );
         (a, b, c)
     }
 }
@@ -151,10 +161,10 @@ where
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (a, b, c) = self.get_parameters_at(at);
         let u = rng.random::<Float>();
-        let raw = if u < (c-a)/(b-a) {
-            a + (u*(b-a)*(c-a)).sqrt()
+        let raw = if u < (c - a) / (b - a) {
+            a + (u * (b - a) * (c - a)).sqrt()
         } else {
-            b - ((1.0-u)*(b-a)*(b-c)).sqrt()
+            b - ((1.0 - u) * (b - a) * (b - c)).sqrt()
         };
         self.unit.to(raw)
     }
@@ -183,8 +193,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{rngs::StdRng, SeedableRng};
     use crate::test_utils::{BasicStatistics, assert_close};
+    use rand::{SeedableRng, rngs::StdRng};
 
     mod triangular {
         use super::*;
@@ -240,7 +250,12 @@ mod tests {
             let stats = BasicStatistics::compute(&samples);
 
             assert_close(stats.mean(), dist.mean_at_t0(), 0.02, "Triangular mean");
-            assert_close(stats.variance(), dist.variance_at_t0(), 0.05, "Triangular variance");
+            assert_close(
+                stats.variance(),
+                dist.variance_at_t0(),
+                0.05,
+                "Triangular variance",
+            );
         }
     }
 
