@@ -1,24 +1,9 @@
 //! Event types and event queue for discrete event simulation.
 
+use super::{AgentId, CallId, CallType};
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::time::Duration;
-
-/// Unique identifier for a call in the simulation.
-/// Each call that enters the system gets a unique ID (0, 1, 2, ...).
-pub type CallId = usize;
-
-/// Unique identifier for an agent in the simulation.
-/// Each agent gets a unique ID (0, 1, 2, ...).
-pub type AgentId = usize;
-
-/// Type identifier for different call types.
-/// For example: 0 = Sales, 1 = Support, 2 = Billing
-pub type CallType = usize;
-
-/// Type identifier for different agent types/skill groups.
-/// For example: 0 = Junior, 1 = Senior, 2 = Specialist
-pub type AgentType = usize;
 
 /// Types of events that can occur in the simulation.
 #[derive(Debug, Clone)]
@@ -39,15 +24,15 @@ pub enum EventType {
 #[derive(Debug, Clone)]
 pub struct Event {
     /// Time when this event occurs.
-    pub time: Duration,
+    time: Duration,
     /// Type of event and its associated data.
-    pub event_type: EventType,
+    event_type: EventType,
 }
 
 impl Event {
     /// Creates a new call arrival event.
     pub fn call_arrival(time: Duration, call_id: CallId, call_type: CallType) -> Self {
-        Event {
+        Self {
             time,
             event_type: EventType::CallArrival { call_id, call_type },
         }
@@ -55,7 +40,7 @@ impl Event {
 
     /// Creates a new service start event.
     pub fn service_start(time: Duration, call_id: CallId, agent_id: AgentId) -> Self {
-        Event {
+        Self {
             time,
             event_type: EventType::ServiceStart { call_id, agent_id },
         }
@@ -63,10 +48,20 @@ impl Event {
 
     /// Creates a new service end event.
     pub fn service_end(time: Duration, call_id: CallId, agent_id: AgentId) -> Self {
-        Event {
+        Self {
             time,
             event_type: EventType::ServiceEnd { call_id, agent_id },
         }
+    }
+
+    /// Returns the time when this event occurs.
+    pub fn time(&self) -> Duration {
+        self.time
+    }
+
+    /// Returns a reference to the event type and its associated data.
+    pub fn event_type(&self) -> &EventType {
+        &self.event_type
     }
 }
 
@@ -103,7 +98,7 @@ pub struct EventQueue {
 impl EventQueue {
     /// Creates a new empty event queue.
     pub fn new() -> Self {
-        EventQueue {
+        Self {
             heap: BinaryHeap::new(),
         }
     }
@@ -153,9 +148,9 @@ mod tests {
         queue.push(e3);
 
         // Should pop events in chronological order (earliest first)
-        assert_eq!(queue.pop().unwrap().time, Duration::from_secs(5));
-        assert_eq!(queue.pop().unwrap().time, Duration::from_secs(10));
-        assert_eq!(queue.pop().unwrap().time, Duration::from_secs(15));
+        assert_eq!(queue.pop().unwrap().time(), Duration::from_secs(5));
+        assert_eq!(queue.pop().unwrap().time(), Duration::from_secs(10));
+        assert_eq!(queue.pop().unwrap().time(), Duration::from_secs(15));
         assert!(queue.pop().is_none());
     }
 
@@ -183,19 +178,19 @@ mod tests {
     #[test]
     fn test_event_types() {
         let call_arrival = Event::call_arrival(Duration::from_secs(1), 42, 3);
-        match call_arrival.event_type {
+        match call_arrival.event_type() {
             EventType::CallArrival { call_id, call_type } => {
-                assert_eq!(call_id, 42);
-                assert_eq!(call_type, 3);
+                assert_eq!(*call_id, 42);
+                assert_eq!(*call_type, 3);
             }
             _ => panic!("Expected CallArrival event"),
         }
 
         let service_start = Event::service_start(Duration::from_secs(2), 10, 5);
-        match service_start.event_type {
+        match service_start.event_type() {
             EventType::ServiceStart { call_id, agent_id } => {
-                assert_eq!(call_id, 10);
-                assert_eq!(agent_id, 5);
+                assert_eq!(*call_id, 10);
+                assert_eq!(*agent_id, 5);
             }
             _ => panic!("Expected ServiceStart event"),
         }

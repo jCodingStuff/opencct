@@ -1,6 +1,6 @@
 //! Queue entity for discrete event simulation.
 
-use super::event::CallId;
+use super::CallId;
 use std::collections::VecDeque;
 
 /// Represents a queue of waiting calls.
@@ -16,7 +16,7 @@ pub struct Queue {
 impl Queue {
     /// Creates a new empty queue.
     pub fn new() -> Self {
-        Queue {
+        Self {
             calls: VecDeque::new(),
             peak_length: 0,
         }

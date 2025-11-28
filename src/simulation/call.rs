@@ -1,6 +1,6 @@
 //! Call entity for discrete event simulation.
 
-use super::event::{AgentId, CallId, CallType};
+use super::{AgentId, CallId, CallType};
 use std::time::Duration;
 
 /// Represents a call in the system.
@@ -17,7 +17,7 @@ pub struct Call {
 impl Call {
     /// Creates a new call that just arrived.
     pub fn new(id: CallId, call_type: CallType, arrival_time: Duration) -> Self {
-        Call {
+        Self {
             id,
             call_type,
             arrival_time,

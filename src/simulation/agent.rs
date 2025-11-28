@@ -1,6 +1,6 @@
 //! Agent entity for discrete event simulation.
 
-use super::event::{AgentId, AgentType, CallId};
+use super::{AgentId, AgentType, CallId};
 use std::time::Duration;
 
 /// Represents an agent who can serve calls.
@@ -17,7 +17,7 @@ pub struct Agent {
 impl Agent {
     /// Creates a new agent, idle since the given time.
     pub fn new(id: AgentId, agent_type: AgentType, idle_since: Duration) -> Self {
-        Agent {
+        Self {
             id,
             agent_type,
             current_call: None,
