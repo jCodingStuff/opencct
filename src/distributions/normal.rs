@@ -3,7 +3,7 @@
 use rand::RngCore;
 use std::time::Duration;
 
-use super::{Distribution, algorithms::zignor::scaled_zignor_method};
+use super::{Distribution, TimeVaryingParameterFunction, algorithms::zignor::scaled_zignor_method};
 use crate::{Float, time::TimeUnit};
 
 /// Normal distribution. Since in the current context, negative time does not make sense, the negative values
@@ -84,28 +84,23 @@ impl Distribution for Normal {
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = NormalTV::new(
-///     |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
-///     |t| 3.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     Box::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1),
+///     Box::new(|t| 3.0 + TimeUnit::Seconds.from(t) * 0.1),
 ///     TimeUnit::Seconds,
 /// );
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
-#[derive(Debug, Copy, Clone)]
-pub struct NormalTV<FMu, FSigma> {
+pub struct NormalTV {
     /// The mean as a function of time
-    mu: FMu,
+    mu: TimeVaryingParameterFunction,
     /// The standard deviation as a function of time
-    sigma: FSigma,
+    sigma: TimeVaryingParameterFunction,
     /// Time unit
     unit: TimeUnit,
 }
 
-impl<FMu, FSigma> NormalTV<FMu, FSigma>
-where
-    FMu: Fn(Duration) -> Float,
-    FSigma: Fn(Duration) -> Float,
-{
+impl NormalTV {
     /// Create a new [NormalTV] distribution with given mean and standard deviation functions.
     /// # Arguments
     /// * `mu` - Function to compute the mean at a given time.
@@ -115,27 +110,26 @@ where
     /// A new [NormalTV].
     /// # Be careful!
     /// `sigma` bound is not checked in release mode! Make sure you fulfill it!
-    pub fn new(mu: FMu, sigma: FSigma, unit: TimeUnit) -> Self {
+    pub fn new(
+        mu: TimeVaryingParameterFunction,
+        sigma: TimeVaryingParameterFunction,
+        unit: TimeUnit,
+    ) -> Self {
         Self { mu, sigma, unit }
     }
 
     /// Get the parameters (mu, sigma) of the distribution at a given point in time
     fn get_parameters_at(&self, at: Duration) -> (Float, Float) {
         let (mu, sigma) = ((self.mu)(at), (self.sigma)(at));
-        debug_assert!(sigma > 0.0, "Invalid sigma at {at:?}: {sigma}");
+        assert!(sigma > 0.0, "Invalid sigma at {at:?}: {sigma}");
         (mu, sigma)
     }
 }
 
-impl<FMu, FSigma> Distribution for NormalTV<FMu, FSigma>
-where
-    FMu: Fn(Duration) -> Float,
-    FSigma: Fn(Duration) -> Float,
-{
+impl Distribution for NormalTV {
     /// See [Distribution::sample]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the standard deviation <= 0
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the standard deviation <= 0
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (mu, sigma) = self.get_parameters_at(at);
         let raw = scaled_zignor_method(rng, mu, sigma);
@@ -144,16 +138,14 @@ where
 
     /// See [Distribution::mean]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the standard deviation <= 0
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the standard deviation <= 0
     fn mean(&self, at: Duration) -> Duration {
         self.unit.to(self.get_parameters_at(at).0)
     }
 
     /// See [Distribution::variance]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the standard deviation <= 0
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the standard deviation <= 0
     fn variance(&self, at: Duration) -> Duration {
         self.unit.to2(self.get_parameters_at(at).1.powi(2))
     }
@@ -217,8 +209,8 @@ mod tests {
         #[test]
         fn samples_positive() {
             let dist = NormalTV::new(
-                |t| 0.5 + TimeUnit::Millis.from(t) * 0.01,
-                |t| 2.0 + TimeUnit::Millis.from(t) * 0.05,
+                Box::new(|t| 0.5 + TimeUnit::Millis.from(t) * 0.01),
+                Box::new(|t| 2.0 + TimeUnit::Millis.from(t) * 0.05),
                 TimeUnit::Millis,
             );
             let mut rng = StdRng::from_os_rng();
@@ -239,8 +231,8 @@ mod tests {
             const N_SAMPLES: usize = 500_000;
 
             let dist = NormalTV::new(
-                |t| 50.0 + TimeUnit::Millis.from(t) * 0.1,
-                |t| 2.0 + TimeUnit::Millis.from(t) * 0.05,
+                Box::new(|t| 50.0 + TimeUnit::Millis.from(t) * 0.1),
+                Box::new(|t| 2.0 + TimeUnit::Millis.from(t) * 0.05),
                 TimeUnit::Millis,
             );
             let mut rng = StdRng::from_os_rng();

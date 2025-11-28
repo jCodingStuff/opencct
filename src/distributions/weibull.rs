@@ -3,7 +3,7 @@
 use rand::{Rng, RngCore};
 use std::time::Duration;
 
-use super::Distribution;
+use super::{Distribution, TimeVaryingParameterFunction};
 use crate::{Float, math::gamma, time::TimeUnit};
 
 /// Weibull distribution.
@@ -78,28 +78,23 @@ impl Distribution for Weibull {
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = WeibullTV::new(
-///     |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
-///     |t| 3.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     Box::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1),
+///     Box::new(|t| 3.0 + TimeUnit::Seconds.from(t) * 0.1),
 ///     TimeUnit::Seconds,
 /// );
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
-#[derive(Debug, Copy, Clone)]
-pub struct WeibullTV<Fl, Fk> {
+pub struct WeibullTV {
     /// Scale parameter as a function of time
-    lambda: Fl,
+    lambda: TimeVaryingParameterFunction,
     /// Shape parameter as a function of time
-    k: Fk,
+    k: TimeVaryingParameterFunction,
     /// Time unit
     unit: TimeUnit,
 }
 
-impl<Fl, Fk> WeibullTV<Fl, Fk>
-where
-    Fl: Fn(Duration) -> Float,
-    Fk: Fn(Duration) -> Float,
-{
+impl WeibullTV {
     /// Create a new [WeibullTV] distribution with given shape and scale functions.
     /// # Arguments
     /// * `lambda` - Function to compute the scale at a given time. Must be > 0 for any t >= 0
@@ -107,16 +102,18 @@ where
     /// * `unit` - The [TimeUnit] that the distribution samples.
     /// # Returns
     /// * A new [WeibullTV].
-    /// # Be careful!
-    /// `lambda` and `k` values are not checked in release mode! Make sure you fulfill the contract!
-    pub fn new(lambda: Fl, k: Fk, unit: TimeUnit) -> Self {
+    pub fn new(
+        lambda: TimeVaryingParameterFunction,
+        k: TimeVaryingParameterFunction,
+        unit: TimeUnit,
+    ) -> Self {
         Self { lambda, k, unit }
     }
 
     /// Get the parameters (lambda, k) of the distribution at a given point in time
     fn get_parameters_at(&self, at: Duration) -> (Float, Float) {
         let (lambda, k) = ((self.lambda)(at), (self.k)(at));
-        debug_assert!(
+        assert!(
             lambda > 0.0 && k > 0.0,
             "Invalid lambda {lambda} or k {k} bound at {at:?}"
         );
@@ -124,15 +121,10 @@ where
     }
 }
 
-impl<Fl, Fk> Distribution for WeibullTV<Fl, Fk>
-where
-    Fl: Fn(Duration) -> Float,
-    Fk: Fn(Duration) -> Float,
-{
+impl Distribution for WeibullTV {
     /// See [Distribution::sample]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the shape or scale are <= 0.
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (lambda, k) = self.get_parameters_at(at);
         let raw = lambda * (-rng.random::<Float>().ln()).powf(1.0 / k);
@@ -141,8 +133,7 @@ where
 
     /// See [Distribution::mean]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the shape or scale are <= 0.
     fn mean(&self, at: Duration) -> Duration {
         let (lambda, k) = self.get_parameters_at(at);
         let raw = lambda * gamma(1.0 + 1.0 / k);
@@ -151,8 +142,7 @@ where
 
     /// See [Distribution::variance]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the shape or scale are <= 0.
     fn variance(&self, at: Duration) -> Duration {
         let (lambda, k) = self.get_parameters_at(at);
         let raw = lambda.powi(2) * (gamma(1.0 + 2.0 / k) - gamma(1.0 + 1.0 / k).powi(2));
@@ -218,7 +208,7 @@ mod tests {
 
         #[test]
         fn smoke_test() {
-            let dist = WeibullTV::new(|_| 2.0, |_| 1.5, TimeUnit::Seconds);
+            let dist = WeibullTV::new(Box::new(|_| 2.0), Box::new(|_| 1.5), TimeUnit::Seconds);
             let mut rng = StdRng::seed_from_u64(42);
             let sample = dist.sample_at_t0(&mut rng);
             assert!(sample >= Duration::ZERO);
@@ -230,8 +220,8 @@ mod tests {
             const N_SAMPLES: usize = 500_000;
 
             let dist = WeibullTV::new(
-                |t| 0.5 * TimeUnit::Seconds.from(t) + 0.1,
-                |t| 0.2 * TimeUnit::Seconds.from(t) + 1.0,
+                Box::new(|t| 0.5 * TimeUnit::Seconds.from(t) + 0.1),
+                Box::new(|t| 0.2 * TimeUnit::Seconds.from(t) + 1.0),
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();

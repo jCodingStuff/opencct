@@ -3,7 +3,9 @@
 use rand::RngCore;
 use std::time::Duration;
 
-use super::{Distribution, algorithms::marsaglia_tsang::MarsagliaTsang};
+use super::{
+    Distribution, TimeVaryingParameterFunction, algorithms::marsaglia_tsang::MarsagliaTsang,
+};
 use crate::{Float, time::TimeUnit};
 
 /// Beta distribution.
@@ -99,28 +101,23 @@ impl Distribution for Beta {
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = BetaTV::new(
-///     |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
-///     |t| 3.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     Box::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1),
+///     Box::new(|t| 3.0 + TimeUnit::Seconds.from(t) * 0.1),
 ///     TimeUnit::Seconds,
 /// );
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
-#[derive(Debug, Copy, Clone)]
-pub struct BetaTV<Fa, Fb> {
+pub struct BetaTV {
     /// Shape parameter
-    alpha: Fa,
+    alpha: TimeVaryingParameterFunction,
     /// Shape parameter
-    beta: Fb,
+    beta: TimeVaryingParameterFunction,
     /// Time unit
     unit: TimeUnit,
 }
 
-impl<Fa, Fb> BetaTV<Fa, Fb>
-where
-    Fa: Fn(Duration) -> Float,
-    Fb: Fn(Duration) -> Float,
-{
+impl BetaTV {
     /// Create a new [BetaTV] distribution with given shape functions.
     /// # Arguments
     /// * `alpha` - Function to compute the shape at a given time. Must be > 0 for any t >= 0
@@ -130,14 +127,18 @@ where
     /// * A new [BetaTV].
     /// # Be careful!
     /// `alpha` and `beta` values are not checked in release mode! Make sure you fulfill the contract!
-    pub fn new(alpha: Fa, beta: Fb, unit: TimeUnit) -> Self {
+    pub fn new(
+        alpha: TimeVaryingParameterFunction,
+        beta: TimeVaryingParameterFunction,
+        unit: TimeUnit,
+    ) -> Self {
         Self { alpha, beta, unit }
     }
 
     /// Get the parameters (alpha, beta) of the distribution at a given point in time
     fn get_parameters_at(&self, at: Duration) -> (Float, Float) {
         let (alpha, beta) = ((self.alpha)(at), (self.beta)(at));
-        debug_assert!(
+        assert!(
             alpha > 0.0 && beta > 0.0,
             "Invalid alpha {alpha} or beta {beta} bound at {at:?}"
         );
@@ -145,15 +146,10 @@ where
     }
 }
 
-impl<Fa, Fb> Distribution for BetaTV<Fa, Fb>
-where
-    Fa: Fn(Duration) -> Float,
-    Fb: Fn(Duration) -> Float,
-{
+impl Distribution for BetaTV {
     /// See [Distribution::sample]
     /// # Panic
-    /// In debug, this function will panic if at the requested time either of the shape parameters is <= 0.
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time either of the shape parameters is <= 0.
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (alpha, beta) = self.get_parameters_at(at);
         let x = MarsagliaTsang::sample(rng, alpha, 1.0);
@@ -163,8 +159,7 @@ where
 
     /// See [Distribution::mean]
     /// # Panic
-    /// In debug, this function will panic if at the requested time either of the shape parameters is <= 0.
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time either of the shape parameters is <= 0.
     fn mean(&self, at: Duration) -> Duration {
         let (alpha, beta) = self.get_parameters_at(at);
         self.unit.to(alpha / (alpha + beta))
@@ -172,8 +167,7 @@ where
 
     /// See [Distribution::variance]
     /// # Panic
-    /// In debug, this function will panic if at the requested time either of the shape parameters is <= 0.
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time either of the shape parameters is <= 0.
     fn variance(&self, at: Duration) -> Duration {
         let (alpha, beta) = self.get_parameters_at(at);
         self.unit
@@ -244,8 +238,8 @@ mod tests {
         #[test]
         fn tv_samples_positive() {
             let dist = BetaTV::new(
-                |t| 1.0 + TimeUnit::Seconds.from(t) * 0.5,
-                |t| 2.0 + TimeUnit::Seconds.from(t) * 0.5,
+                Box::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.5),
+                Box::new(|t| 2.0 + TimeUnit::Seconds.from(t) * 0.5),
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();
@@ -263,8 +257,8 @@ mod tests {
         #[ignore] // statistical test, expensive
         fn mean_and_variance_time_varying() {
             let dist = BetaTV::new(
-                |t| 1.0 + TimeUnit::Seconds.from(t) * 0.5,
-                |t| 2.0 + TimeUnit::Seconds.from(t) * 0.5,
+                Box::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.5),
+                Box::new(|t| 2.0 + TimeUnit::Seconds.from(t) * 0.5),
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();

@@ -5,7 +5,9 @@
 use rand::RngCore;
 use std::time::Duration;
 
-use super::{Distribution, algorithms::marsaglia_tsang::MarsagliaTsang};
+use super::{
+    Distribution, TimeVaryingParameterFunction, algorithms::marsaglia_tsang::MarsagliaTsang,
+};
 use crate::{Float, time::TimeUnit};
 
 /// Gamma-Erlang distribution.
@@ -94,28 +96,23 @@ impl Distribution for GammaErlang {
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = GammaErlangTV::new(
-///     |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
-///     |t| 3.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     Box::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1),
+///     Box::new(|t| 3.0 + TimeUnit::Seconds.from(t) * 0.1),
 ///     TimeUnit::Seconds,
 /// );
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
-#[derive(Debug, Copy, Clone)]
-pub struct GammaErlangTV<Fa, Fb> {
+pub struct GammaErlangTV {
     /// Shape parameter as a function of time
-    alpha: Fa,
+    alpha: TimeVaryingParameterFunction,
     /// Scale parameter as a function of time
-    theta: Fb,
+    theta: TimeVaryingParameterFunction,
     /// Time unit
     unit: TimeUnit,
 }
 
-impl<Fa, Fb> GammaErlangTV<Fa, Fb>
-where
-    Fa: Fn(Duration) -> Float,
-    Fb: Fn(Duration) -> Float,
-{
+impl GammaErlangTV {
     /// Create a new [GammaErlang] distribution with given shape and scale functions.
     /// # Arguments
     /// * `alpha` - Function to compute the shape at a given time. Must be > 0 for any t >= 0
@@ -125,14 +122,18 @@ where
     /// * A new [GammaErlang].
     /// # Be careful!
     /// `alpha` and `theta` values are not checked in release mode! Make sure you fulfill the contract!
-    pub fn new(alpha: Fa, theta: Fb, unit: TimeUnit) -> Self {
+    pub fn new(
+        alpha: TimeVaryingParameterFunction,
+        theta: TimeVaryingParameterFunction,
+        unit: TimeUnit,
+    ) -> Self {
         Self { alpha, theta, unit }
     }
 
     /// Get the parameters (alpha, theta) of the distribution at a given point in time
     fn get_parameters_at(&self, at: Duration) -> (Float, Float) {
         let (alpha, theta) = ((self.alpha)(at), (self.theta)(at));
-        debug_assert!(
+        assert!(
             alpha > 0.0 && theta > 0.0,
             "Invalid alpha {alpha} or theta {theta} bound at {at:?}"
         );
@@ -140,15 +141,10 @@ where
     }
 }
 
-impl<Fa, Fb> Distribution for GammaErlangTV<Fa, Fb>
-where
-    Fa: Fn(Duration) -> Float,
-    Fb: Fn(Duration) -> Float,
-{
+impl Distribution for GammaErlangTV {
     /// See [Distribution::sample]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the shape or scale are <= 0.
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (alpha, theta) = self.get_parameters_at(at);
         let raw = MarsagliaTsang::sample(rng, alpha, theta);
@@ -157,8 +153,7 @@ where
 
     /// See [Distribution::mean]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the shape or scale are <= 0.
     fn mean(&self, at: Duration) -> Duration {
         let (alpha, theta) = self.get_parameters_at(at);
         self.unit.to(alpha * theta)
@@ -166,8 +161,7 @@ where
 
     /// See [Distribution::variance]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the shape or scale are <= 0.
     fn variance(&self, at: Duration) -> Duration {
         let (alpha, theta) = self.get_parameters_at(at);
         self.unit.to2(alpha * theta.powi(2))
@@ -242,7 +236,7 @@ mod tests {
 
         #[test]
         fn smoke_sample_tv() {
-            let dist = GammaErlangTV::new(|_| 2.0, |_| 3.0, TimeUnit::Seconds);
+            let dist = GammaErlangTV::new(Box::new(|_| 2.0), Box::new(|_| 3.0), TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
             let _ = dist.sample_at_t0(&mut rng);
             let _ = dist.sample(Duration::from_secs(5), &mut rng);
@@ -254,8 +248,8 @@ mod tests {
             const N_SAMPLES: usize = 1_000_000;
 
             let dist = GammaErlangTV::new(
-                |t| 0.5 * TimeUnit::Seconds.from(t) + 0.1,
-                |t| 0.2 * TimeUnit::Seconds.from(t) + 1.0,
+                Box::new(|t| 0.5 * TimeUnit::Seconds.from(t) + 0.1),
+                Box::new(|t| 0.2 * TimeUnit::Seconds.from(t) + 1.0),
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();

@@ -3,6 +3,12 @@
 use rand::RngCore;
 use std::time::Duration;
 
+use crate::Float;
+
+/// Type alias for time-varying parameter functions.
+/// Used by time-varying distributions to model parameters that change over time.
+pub type TimeVaryingParameterFunction = Box<dyn Fn(Duration) -> Float>;
+
 /// Trait for probability distributions.
 /// All structs implementing this trait must know that the base unit is seconds.
 pub trait Distribution {

@@ -3,7 +3,7 @@
 use rand::{Rng, RngCore};
 use std::time::Duration;
 
-use super::Distribution;
+use super::{Distribution, TimeVaryingParameterFunction};
 use crate::{Float, time::TimeUnit};
 
 /// Uniform distribution.
@@ -72,28 +72,23 @@ impl Distribution for Uniform {
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = UniformTV::new(
-///     |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
-///     |t| 3.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     Box::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1),
+///     Box::new(|t| 3.0 + TimeUnit::Seconds.from(t) * 0.1),
 ///     TimeUnit::Seconds,
 /// );
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
-#[derive(Debug, Copy, Clone)]
-pub struct UniformTV<FMin, FMax> {
+pub struct UniformTV {
     /// Minimum value as a function of time
-    min: FMin,
+    min: TimeVaryingParameterFunction,
     /// Maximum value as a function of time
-    max: FMax,
+    max: TimeVaryingParameterFunction,
     /// Time unit
     unit: TimeUnit,
 }
 
-impl<FMin, FMax> UniformTV<FMin, FMax>
-where
-    FMin: Fn(Duration) -> Float,
-    FMax: Fn(Duration) -> Float,
-{
+impl UniformTV {
     /// Create a new [UniformTV] distribution with given min and max functions.
     /// # Arguments
     /// * `min` - Function to compute the minimum bound at a given time. Must be > 0 and <= max for any t >= 0
@@ -101,16 +96,18 @@ where
     /// * `unit` - The [TimeUnit] that the distribution samples.
     /// # Returns
     /// A new [UniformTV].
-    /// # Be careful!
-    /// `min` and `max` bounds are not checked in release mode! Make sure you fulfill the bounds!
-    pub fn new(min: FMin, max: FMax, unit: TimeUnit) -> Self {
+    pub fn new(
+        min: TimeVaryingParameterFunction,
+        max: TimeVaryingParameterFunction,
+        unit: TimeUnit,
+    ) -> Self {
         Self { min, max, unit }
     }
 
     /// Get the bounds (min, max) of the distribution at a given point in time
     fn get_bounds_at(&self, at: Duration) -> (Float, Float) {
         let (min, max) = ((self.min)(at), (self.max)(at));
-        debug_assert!(
+        assert!(
             min <= max && min >= 0.0,
             "Invalid bound at {at:?}: [{min}, {max}]"
         );
@@ -118,15 +115,11 @@ where
     }
 }
 
-impl<FMin, FMax> Distribution for UniformTV<FMin, FMax>
-where
-    FMin: Fn(Duration) -> Float,
-    FMax: Fn(Duration) -> Float,
-{
+impl Distribution for UniformTV {
     /// See [Distribution::sample]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the lower bound is higher than the upper one
-    /// or if any of the bounds <= 0. **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the lower bound is higher than the upper one
+    /// or if any of the bounds <= 0.
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (min, max) = self.get_bounds_at(at);
         let raw = min + (max - min) * rng.random::<Float>();
@@ -135,8 +128,8 @@ where
 
     /// See [Distribution::mean]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the lower bound is higher than the upper one
-    /// or if any of the bounds <= 0. **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the lower bound is higher than the upper one
+    /// or if any of the bounds <= 0.
     fn mean(&self, at: Duration) -> Duration {
         let (min, max) = self.get_bounds_at(at);
         let raw = 0.5 * (min + max);
@@ -145,8 +138,8 @@ where
 
     /// See [Distribution::variance]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the lower bound is higher than the upper one
-    /// or if any of the bounds <= 0. **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the lower bound is higher than the upper one
+    /// or if any of the bounds <= 0.
     fn variance(&self, at: Duration) -> Duration {
         let (min, max) = self.get_bounds_at(at);
         let raw = (max - min).powi(2) / 12.0;
@@ -227,7 +220,11 @@ mod tests {
         fn samples_within_bounds() {
             let low = 1.0;
             let high = 3.0;
-            let dist = UniformTV::new(|_| low, |_| high, TimeUnit::Seconds);
+            let dist = UniformTV::new(
+                Box::new(move |_| low),
+                Box::new(move |_| high),
+                TimeUnit::Seconds,
+            );
             let mut rng = StdRng::from_os_rng();
 
             for _ in 0..100 {
@@ -243,8 +240,8 @@ mod tests {
         fn time_dependent_bounds() {
             let offset = 5.0;
             let dist = UniformTV::new(
-                |t| TimeUnit::Seconds.from(t),
-                |t| TimeUnit::Seconds.from(t) + offset,
+                Box::new(|t| TimeUnit::Seconds.from(t)),
+                Box::new(move |t| TimeUnit::Seconds.from(t) + offset),
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();
@@ -268,7 +265,7 @@ mod tests {
         #[test]
         #[should_panic]
         fn invalid_bounds_panics() {
-            let dist = UniformTV::new(|_| 5.0, |_| 2.0, TimeUnit::Seconds);
+            let dist = UniformTV::new(Box::new(|_| 5.0), Box::new(|_| 2.0), TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
             dist.sample_at_t0(&mut rng);
         }
@@ -276,7 +273,11 @@ mod tests {
         #[test]
         fn min_equals_max_returns_constant() {
             let value = 4.2;
-            let dist = UniformTV::new(|_| value, |_| value, TimeUnit::Seconds);
+            let dist = UniformTV::new(
+                Box::new(move |_| value),
+                Box::new(move |_| value),
+                TimeUnit::Seconds,
+            );
             let mut rng = StdRng::from_os_rng();
 
             for i in 0..10 {
@@ -292,8 +293,8 @@ mod tests {
             const N_SAMPLES: usize = 500_000;
 
             let dist = UniformTV::new(
-                |t| 0.5 * TimeUnit::Seconds.from(t) + 0.1,
-                |t| 0.8 * TimeUnit::Seconds.from(t) + 1.0,
+                Box::new(|t| 0.5 * TimeUnit::Seconds.from(t) + 0.1),
+                Box::new(|t| 0.8 * TimeUnit::Seconds.from(t) + 1.0),
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();

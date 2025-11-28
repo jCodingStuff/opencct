@@ -3,7 +3,7 @@
 use rand::{Rng, RngCore};
 use std::time::Duration;
 
-use super::Distribution;
+use super::{Distribution, TimeVaryingParameterFunction};
 use crate::{Float, time::TimeUnit};
 
 /// Pareto distribution.
@@ -82,28 +82,23 @@ impl Distribution for Pareto {
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = ParetoTV::new(
-///     |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
-///     |t| 3.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     Box::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1),
+///     Box::new(|t| 3.0 + TimeUnit::Seconds.from(t) * 0.1),
 ///     TimeUnit::Seconds,
 /// );
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
-#[derive(Debug, Copy, Clone)]
-pub struct ParetoTV<Fx, Fa> {
+pub struct ParetoTV {
     /// Scale parameter
-    xm: Fx,
+    xm: TimeVaryingParameterFunction,
     /// Shape parameter
-    alpha: Fa,
+    alpha: TimeVaryingParameterFunction,
     /// Time unit
     unit: TimeUnit,
 }
 
-impl<Fx, Fa> ParetoTV<Fx, Fa>
-where
-    Fx: Fn(Duration) -> Float,
-    Fa: Fn(Duration) -> Float,
-{
+impl ParetoTV {
     /// Create a new [ParetoTV] distribution with given shape and scale functions.
     /// # Arguments
     /// * `xm` - Function to compute the scale at a given time. Must be > 0 for any t >= 0
@@ -113,14 +108,18 @@ where
     /// * A new [ParetoTV].
     /// # Be careful!
     /// `xm` and `alpha` values are not checked in release mode! Make sure you fulfill the contract!
-    pub fn new(xm: Fx, alpha: Fa, unit: TimeUnit) -> Self {
+    pub fn new(
+        xm: TimeVaryingParameterFunction,
+        alpha: TimeVaryingParameterFunction,
+        unit: TimeUnit,
+    ) -> Self {
         Self { xm, alpha, unit }
     }
 
     /// Get the parameters (xm, alpha) of the distribution at a given point in time
     fn get_parameters_at(&self, at: Duration) -> (Float, Float) {
         let (xm, alpha) = ((self.xm)(at), (self.alpha)(at));
-        debug_assert!(
+        assert!(
             xm > 0.0 && alpha > 0.0,
             "Invalid xm {xm} or alpha {alpha} bound at {at:?}"
         );
@@ -128,15 +127,10 @@ where
     }
 }
 
-impl<Fx, Fa> Distribution for ParetoTV<Fx, Fa>
-where
-    Fx: Fn(Duration) -> Float,
-    Fa: Fn(Duration) -> Float,
-{
+impl Distribution for ParetoTV {
     /// See [Distribution::sample]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the shape or scale are <= 0.
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (xm, alpha) = self.get_parameters_at(at);
         let raw = xm / rng.random::<Float>().powf(1.0 / alpha);
@@ -145,8 +139,7 @@ where
 
     /// See [Distribution::mean]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the shape or scale are <= 0.
     fn mean(&self, at: Duration) -> Duration {
         let (xm, alpha) = self.get_parameters_at(at);
         let raw = if alpha <= 1.0 {
@@ -159,8 +152,7 @@ where
 
     /// See [Distribution::variance]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the shape or scale are <= 0.
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the shape or scale are <= 0.
     fn variance(&self, at: Duration) -> Duration {
         let (xm, alpha) = self.get_parameters_at(at);
         let raw = if alpha <= 2.0 {
@@ -231,8 +223,8 @@ mod tests {
         #[test]
         fn samples_positive() {
             let dist = ParetoTV::new(
-                |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
-                |_| 2.0,
+                Box::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1),
+                Box::new(|_| 2.0),
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();
@@ -251,8 +243,8 @@ mod tests {
         #[ignore]
         fn mean_and_variance_time_varying() {
             let dist = ParetoTV::new(
-                |t| 1.0 + TimeUnit::Seconds.from(t) * 0.2,
-                |_| 3.0,
+                Box::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.2),
+                Box::new(|_| 3.0),
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();

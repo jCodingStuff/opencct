@@ -3,7 +3,7 @@
 use rand::RngCore;
 use std::time::Duration;
 
-use super::{Distribution, algorithms::zignor::scaled_zignor_method};
+use super::{Distribution, TimeVaryingParameterFunction, algorithms::zignor::scaled_zignor_method};
 use crate::{Float, time::TimeUnit};
 
 /// Log-normal distribution.
@@ -84,28 +84,23 @@ impl Distribution for LogNormal {
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = LogNormalTV::new(
-///     |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
-///     |t| 3.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     Box::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1),
+///     Box::new(|t| 3.0 + TimeUnit::Seconds.from(t) * 0.1),
 ///     TimeUnit::Seconds,
 /// );
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
-#[derive(Debug, Copy, Clone)]
-pub struct LogNormalTV<FMu, FSigma> {
+pub struct LogNormalTV {
     /// The logarithm of location function of time
-    mu: FMu,
+    mu: TimeVaryingParameterFunction,
     /// The logarithm of scale as a function of time
-    sigma: FSigma,
+    sigma: TimeVaryingParameterFunction,
     /// Time unit
     unit: TimeUnit,
 }
 
-impl<FMu, FSigma> LogNormalTV<FMu, FSigma>
-where
-    FMu: Fn(Duration) -> Float,
-    FSigma: Fn(Duration) -> Float,
-{
+impl LogNormalTV {
     /// Create a new [LogNormalTV] distribution with given parameter functions.
     /// # Arguments
     /// * `mu` - Function to compute the logarithm of location at a given time.
@@ -115,27 +110,26 @@ where
     /// A new [LogNormalTV].
     /// # Be careful!
     /// `sigma` bound is not checked in release mode! Make sure you fulfill it!
-    pub fn new(mu: FMu, sigma: FSigma, unit: TimeUnit) -> Self {
+    pub fn new(
+        mu: TimeVaryingParameterFunction,
+        sigma: TimeVaryingParameterFunction,
+        unit: TimeUnit,
+    ) -> Self {
         Self { mu, sigma, unit }
     }
 
     /// Get the parameters (mu, sigma) of the distribution at a given point in time
     fn get_parameters_at(&self, at: Duration) -> (Float, Float) {
         let (mu, sigma) = ((self.mu)(at), (self.sigma)(at));
-        debug_assert!(sigma > 0.0, "Invalid sigma at {at:?}: {sigma}");
+        assert!(sigma > 0.0, "Invalid sigma at {at:?}: {sigma}");
         (mu, sigma)
     }
 }
 
-impl<FMu, FSigma> Distribution for LogNormalTV<FMu, FSigma>
-where
-    FMu: Fn(Duration) -> Float,
-    FSigma: Fn(Duration) -> Float,
-{
+impl Distribution for LogNormalTV {
     /// See [Distribution::sample]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the logarithm of scale <= 0
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the logarithm of scale <= 0
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (mu, sigma) = self.get_parameters_at(at);
         let x = scaled_zignor_method(rng, mu, sigma);
@@ -144,8 +138,7 @@ where
 
     /// See [Distribution::mean]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the logarithm of scale <= 0
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the logarithm of scale <= 0
     fn mean(&self, at: Duration) -> Duration {
         let (mu, sigma) = self.get_parameters_at(at);
         let raw = (mu + 0.5 * sigma.powi(2)).exp();
@@ -154,8 +147,7 @@ where
 
     /// See [Distribution::variance]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the logarithm of scale <= 0
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the logarithm of scale <= 0
     fn variance(&self, at: Duration) -> Duration {
         let (mu, sigma) = self.get_parameters_at(at);
         let raw = sigma.powi(2).exp_m1() * (2.0 * mu + sigma.powi(2)).exp();
@@ -221,7 +213,7 @@ mod tests {
 
         #[test]
         fn samples_positive() {
-            let dist = LogNormalTV::new(|_| 0.0, |_| 1.0, TimeUnit::Seconds);
+            let dist = LogNormalTV::new(Box::new(|_| 0.0), Box::new(|_| 1.0), TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
 
             for i in 0..10 {
@@ -240,8 +232,8 @@ mod tests {
             const N_SAMPLES: usize = 500_000;
 
             let dist = LogNormalTV::new(
-                |t: Duration| 0.5 * TimeUnit::Seconds.from(t) + 0.1,
-                |_| 0.25,
+                Box::new(|t: Duration| 0.5 * TimeUnit::Seconds.from(t) + 0.1),
+                Box::new(|_| 0.25),
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();

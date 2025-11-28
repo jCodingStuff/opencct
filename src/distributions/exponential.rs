@@ -3,7 +3,7 @@
 use rand::{Rng, RngCore};
 use std::time::Duration;
 
-use super::Distribution;
+use super::{Distribution, TimeVaryingParameterFunction};
 use crate::{Float, time::TimeUnit};
 
 /// Exponential distribution.
@@ -67,52 +67,42 @@ impl Distribution for Exponential {
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = ExponentialTV::new(
-///     |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     Box::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1),
 ///     TimeUnit::Seconds,
 /// );
 /// let sample = dist.sample(Duration::from_secs(10), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
-#[derive(Debug, Copy, Clone)]
-pub struct ExponentialTV<F> {
+pub struct ExponentialTV {
     /// Rate parameter as a function of time
-    lambda: F,
+    lambda: TimeVaryingParameterFunction,
     /// Time unit
     unit: TimeUnit,
 }
 
-impl<F> ExponentialTV<F>
-where
-    F: Fn(Duration) -> Float,
-{
+impl ExponentialTV {
     /// Create a new [ExponentialTV] distribution with a rate parameter function.
     /// # Arguments
     /// * `lambda` - Function to compute the rate parameter at a given time. Must be > 0 for any t >= 0
     /// * `unit` - The [TimeUnit] that the distribution samples.
     /// # Returns
     /// A new [ExponentialTV].
-    /// # Be careful!
-    /// `lambda` is not checked in release mode! Make sure you fulfill the bounds!
-    pub fn new(lambda: F, unit: TimeUnit) -> Self {
+    pub fn new(lambda: TimeVaryingParameterFunction, unit: TimeUnit) -> Self {
         Self { lambda, unit }
     }
 
     /// Get the lambda parameter at a given point in time
     fn get_lambda_at(&self, at: Duration) -> Float {
         let lambda = (self.lambda)(at);
-        debug_assert!(lambda > 0.0, "Invalid lambda at {at:?}: {lambda}");
+        assert!(lambda > 0.0, "Invalid lambda at {at:?}: {lambda}");
         lambda
     }
 }
 
-impl<F> Distribution for ExponentialTV<F>
-where
-    F: Fn(Duration) -> Float,
-{
+impl Distribution for ExponentialTV {
     /// See [Distribution::sample]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the rate parameter <= 0.
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the rate parameter <= 0.
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let lambda = self.get_lambda_at(at);
         let raw = -rng.random::<Float>().ln() / lambda;
@@ -121,16 +111,14 @@ where
 
     /// See [Distribution::mean]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the rate parameter <= 0.
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the rate parameter <= 0.
     fn mean(&self, at: Duration) -> Duration {
         self.unit.to(1.0 / self.get_lambda_at(at))
     }
 
     /// See [Distribution::variance]
     /// # Panic
-    /// In debug, this function will panic if at the requested time the rate parameter <= 0.
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time the rate parameter <= 0.
     fn variance(&self, at: Duration) -> Duration {
         self.unit.to2(1.0 / self.get_lambda_at(at).powi(2))
     }
@@ -204,8 +192,10 @@ mod tests {
 
         #[test]
         fn smoke_sample_tv() {
-            let dist =
-                ExponentialTV::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1, TimeUnit::Seconds);
+            let dist = ExponentialTV::new(
+                Box::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1),
+                TimeUnit::Seconds,
+            );
             let mut rng = StdRng::from_os_rng();
             let _ = dist.sample_at_t0(&mut rng);
             let _ = dist.sample(Duration::from_secs(5), &mut rng);
@@ -214,7 +204,7 @@ mod tests {
         #[test]
         #[should_panic]
         fn invalid_lambda_panics() {
-            let dist = ExponentialTV::new(|_| 0.0, TimeUnit::Seconds);
+            let dist = ExponentialTV::new(Box::new(|_| 0.0), TimeUnit::Seconds);
             let mut rng = StdRng::from_os_rng();
             dist.sample_at_t0(&mut rng);
         }
@@ -226,8 +216,10 @@ mod tests {
             const MEAN_TOL: Float = 0.02;
             const VAR_TOL: Float = 0.03;
 
-            let dist =
-                ExponentialTV::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1, TimeUnit::Seconds);
+            let dist = ExponentialTV::new(
+                Box::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1),
+                TimeUnit::Seconds,
+            );
             let mut rng = StdRng::from_os_rng();
 
             for t_sec in [0, 5, 10] {

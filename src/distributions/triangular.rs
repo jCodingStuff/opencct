@@ -3,7 +3,7 @@
 use rand::{Rng, RngCore};
 use std::time::Duration;
 
-use super::Distribution;
+use super::{Distribution, TimeVaryingParameterFunction};
 use crate::{Float, time::TimeUnit};
 
 /// Triangular distribution.
@@ -97,32 +97,26 @@ impl Distribution for Triangular {
 ///
 /// let mut rng = StdRng::from_os_rng();
 /// let dist = TriangularTV::new(
-///     |t| 1.0 + TimeUnit::Seconds.from(t) * 0.1,
-///     |t| 3.0 + TimeUnit::Seconds.from(t) * 0.1,
-///     |t| 2.0 + TimeUnit::Seconds.from(t) * 0.1,
+///     Box::new(|t| 1.0 + TimeUnit::Seconds.from(t) * 0.1),
+///     Box::new(|t| 3.0 + TimeUnit::Seconds.from(t) * 0.1),
+///     Box::new(|t| 2.0 + TimeUnit::Seconds.from(t) * 0.1),
 ///     TimeUnit::Hours,
 /// );
 /// let sample = dist.sample(TimeUnit::Hours.to(2.0), &mut rng);
 /// println!("Sampled value: {:?}", sample);
 /// ```
-#[derive(Debug, Copy, Clone)]
-pub struct TriangularTV<Fa, Fb, Fc> {
+pub struct TriangularTV {
     /// Lower limit as a function of time
-    a: Fa,
+    a: TimeVaryingParameterFunction,
     /// Upper limit as a function of time
-    b: Fb,
+    b: TimeVaryingParameterFunction,
     /// Mode as a function of time
-    c: Fc,
+    c: TimeVaryingParameterFunction,
     /// Time unit
     unit: TimeUnit,
 }
 
-impl<Fa, Fb, Fc> TriangularTV<Fa, Fb, Fc>
-where
-    Fa: Fn(Duration) -> Float,
-    Fb: Fn(Duration) -> Float,
-    Fc: Fn(Duration) -> Float,
-{
+impl TriangularTV {
     /// Create a new [TriangularTV] distribution with given low and upper bounds, and mode functions
     /// # Arguments
     /// * `a` - Lower limit as a function of time. Must be >= 0 for any t >= 0
@@ -133,14 +127,19 @@ where
     /// * A new [TriangularTV].
     /// # Be careful!
     /// `a`, `b`, and `c` conditions are not checked in release mode! Make sure you fulfill them!
-    pub fn new(a: Fa, b: Fb, c: Fc, unit: TimeUnit) -> Self {
+    pub fn new(
+        a: TimeVaryingParameterFunction,
+        b: TimeVaryingParameterFunction,
+        c: TimeVaryingParameterFunction,
+        unit: TimeUnit,
+    ) -> Self {
         Self { a, b, c, unit }
     }
 
     /// Get the parameters (a, b, c) of the distribution at a given point in time
     fn get_parameters_at(&self, at: Duration) -> (Float, Float, Float) {
         let (a, b, c) = ((self.a)(at), (self.b)(at), (self.c)(at));
-        debug_assert!(
+        assert!(
             a >= 0.0 && c >= a && b >= c && b > a,
             "At t:{at:?} found invalid parameters [a: {a}, b: {b}, c: {c}]"
         );
@@ -148,16 +147,10 @@ where
     }
 }
 
-impl<Fa, Fb, Fc> Distribution for TriangularTV<Fa, Fb, Fc>
-where
-    Fa: Fn(Duration) -> Float,
-    Fb: Fn(Duration) -> Float,
-    Fc: Fn(Duration) -> Float,
-{
+impl Distribution for TriangularTV {
     /// See [Distribution::sample]
     /// # Panic
-    /// In debug, this function will panic if at the requested time `a < 0` or `c < a` or `b < c` or `b < a`
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time `a < 0` or `c < a` or `b < c` or `b < a`
     fn sample(&self, at: Duration, rng: &mut dyn RngCore) -> Duration {
         let (a, b, c) = self.get_parameters_at(at);
         let u = rng.random::<Float>();
@@ -171,8 +164,7 @@ where
 
     /// See [Distribution::mean]
     /// # Panic
-    /// In debug, this function will panic if at the requested time `a < 0` or `c < a` or `b < c` or `b < a`
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time `a < 0` or `c < a` or `b < c` or `b < a`
     fn mean(&self, at: Duration) -> Duration {
         let (a, b, c) = self.get_parameters_at(at);
         let raw = (a + b + c) / 3.0;
@@ -181,8 +173,7 @@ where
 
     /// See [Distribution::variance]
     /// # Panic
-    /// In debug, this function will panic if at the requested time `a < 0` or `c < a` or `b < c` or `b < a`
-    /// **This is NOT checked in release mode!**
+    /// This function will panic if at the requested time `a < 0` or `c < a` or `b < c` or `b < a`
     fn variance(&self, at: Duration) -> Duration {
         let (a, b, c) = self.get_parameters_at(at);
         let raw = (a.powi(2) + b.powi(2) + c.powi(2) - a * b - a * c - b * c) / 18.0;
@@ -267,7 +258,12 @@ mod tests {
 
         #[test]
         fn smoke_test_sampling() {
-            let dist = TriangularTV::new(|_| 1.0, |_| 5.0, |_| 3.0, TimeUnit::Seconds);
+            let dist = TriangularTV::new(
+                Box::new(|_| 1.0),
+                Box::new(|_| 5.0),
+                Box::new(|_| 3.0),
+                TimeUnit::Seconds,
+            );
             let mut rng = StdRng::from_os_rng();
 
             for _ in 0..10 {
@@ -286,9 +282,9 @@ mod tests {
             const N_SAMPLES: usize = 500_000;
 
             let dist = TriangularTV::new(
-                |t| 0.5 * TimeUnit::Seconds.from(t) + 0.5,
-                |t| 0.7 * TimeUnit::Seconds.from(t) + 4.0,
-                |t| 0.65 * TimeUnit::Seconds.from(t) + 0.89,
+                Box::new(|t| 0.5 * TimeUnit::Seconds.from(t) + 0.5),
+                Box::new(|t| 0.7 * TimeUnit::Seconds.from(t) + 4.0),
+                Box::new(|t| 0.65 * TimeUnit::Seconds.from(t) + 0.89),
                 TimeUnit::Seconds,
             );
             let mut rng = StdRng::from_os_rng();
