@@ -1,4 +1,4 @@
-//! Entities in the call center simulation: calls, agents, queues, and pools.
+//! Call entity for discrete event simulation.
 
 use super::event::{AgentId, CallId, CallType};
 use std::time::Duration;
