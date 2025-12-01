@@ -9,12 +9,7 @@ use std::time::Duration;
 #[derive(Debug, Clone)]
 pub enum EventType {
     /// A new call arrives at the system and enters the queue.
-    CallArrival {
-        call_id: CallId,
-        call_type: CallType,
-    },
-    /// An agent begins serving a call (call leaves queue).
-    ServiceStart { call_id: CallId, agent_id: AgentId },
+    CallArrival { call_type: CallType },
     /// An agent finishes serving a call (agent becomes idle).
     ServiceEnd { call_id: CallId, agent_id: AgentId },
 }
@@ -31,18 +26,10 @@ pub struct Event {
 
 impl Event {
     /// Creates a new call arrival event.
-    pub fn call_arrival(time: Duration, call_id: CallId, call_type: CallType) -> Self {
+    pub fn call_arrival(time: Duration, call_type: CallType) -> Self {
         Self {
             time,
-            event_type: EventType::CallArrival { call_id, call_type },
-        }
-    }
-
-    /// Creates a new service start event.
-    pub fn service_start(time: Duration, call_id: CallId, agent_id: AgentId) -> Self {
-        Self {
-            time,
-            event_type: EventType::ServiceStart { call_id, agent_id },
+            event_type: EventType::CallArrival { call_type },
         }
     }
 
@@ -138,9 +125,9 @@ mod tests {
     #[test]
     fn test_event_ordering() {
         // Create events at different times
-        let e1 = Event::call_arrival(Duration::from_secs(10), 0, 0);
-        let e2 = Event::call_arrival(Duration::from_secs(5), 1, 0);
-        let e3 = Event::call_arrival(Duration::from_secs(15), 2, 0);
+        let e1 = Event::call_arrival(Duration::from_secs(10), 0);
+        let e2 = Event::call_arrival(Duration::from_secs(5), 0);
+        let e3 = Event::call_arrival(Duration::from_secs(15), 0);
 
         let mut queue = EventQueue::new();
         queue.push(e1);
@@ -160,11 +147,11 @@ mod tests {
         assert_eq!(queue.len(), 0);
         assert!(queue.is_empty());
 
-        queue.push(Event::call_arrival(Duration::from_secs(1), 0, 0));
+        queue.push(Event::call_arrival(Duration::from_secs(1), 0));
         assert_eq!(queue.len(), 1);
         assert!(!queue.is_empty());
 
-        queue.push(Event::service_start(Duration::from_secs(2), 0, 0));
+        queue.push(Event::service_end(Duration::from_secs(2), 0, 0));
         assert_eq!(queue.len(), 2);
 
         queue.pop();
@@ -177,22 +164,21 @@ mod tests {
 
     #[test]
     fn test_event_types() {
-        let call_arrival = Event::call_arrival(Duration::from_secs(1), 42, 3);
+        let call_arrival = Event::call_arrival(Duration::from_secs(1), 3);
         match call_arrival.event_type() {
-            EventType::CallArrival { call_id, call_type } => {
-                assert_eq!(*call_id, 42);
+            EventType::CallArrival { call_type } => {
                 assert_eq!(*call_type, 3);
             }
             _ => panic!("Expected CallArrival event"),
         }
 
-        let service_start = Event::service_start(Duration::from_secs(2), 10, 5);
-        match service_start.event_type() {
-            EventType::ServiceStart { call_id, agent_id } => {
+        let service_end = Event::service_end(Duration::from_secs(2), 10, 5);
+        match service_end.event_type() {
+            EventType::ServiceEnd { call_id, agent_id } => {
                 assert_eq!(*call_id, 10);
                 assert_eq!(*agent_id, 5);
             }
-            _ => panic!("Expected ServiceStart event"),
+            _ => panic!("Expected ServiceEnd event"),
         }
     }
 }

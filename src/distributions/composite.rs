@@ -9,9 +9,9 @@ use super::Distribution;
 /// Associates a lower bound in simulation time with a probability distribution.
 pub struct CompositeEntry {
     /// The lower bound time at which this distribution becomes active.
-    pub lower_bound: Duration,
+    lower_bound: Duration,
     /// The distribution active starting at this lower bound.
-    pub distribution: Box<dyn Distribution>,
+    distribution: Box<dyn Distribution>,
 }
 
 /// A composite distribution.

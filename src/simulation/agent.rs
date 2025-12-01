@@ -15,13 +15,13 @@ pub struct Agent {
 }
 
 impl Agent {
-    /// Creates a new agent, idle since the given time.
-    pub fn new(id: AgentId, agent_type: AgentType, idle_since: Duration) -> Self {
+    /// Creates a new agent
+    pub fn new(id: AgentId, agent_type: AgentType) -> Self {
         Self {
             id,
             agent_type,
             current_call: None,
-            idle_since: Some(idle_since),
+            idle_since: Some(Duration::ZERO),
         }
     }
 
@@ -87,22 +87,22 @@ mod tests {
 
     #[test]
     fn test_new_agent() {
-        let agent = Agent::new(5, 0, Duration::from_secs(0));
+        let agent = Agent::new(5, 0);
         assert_eq!(agent.id(), 5);
         assert_eq!(agent.agent_type(), 0);
         assert!(agent.is_idle());
         assert!(!agent.is_busy());
         assert_eq!(agent.current_call(), None);
-        assert_eq!(agent.idle_since(), Some(Duration::from_secs(0)));
+        assert_eq!(agent.idle_since(), Some(Duration::ZERO));
     }
 
     #[test]
     fn test_agent_state_transitions() {
-        let mut agent = Agent::new(0, 0, Duration::from_secs(0));
+        let mut agent = Agent::new(0, 0);
 
         // Agent starts idle
         assert!(agent.is_idle());
-        assert_eq!(agent.idle_since(), Some(Duration::from_secs(0)));
+        assert_eq!(agent.idle_since(), Some(Duration::ZERO));
 
         // Start serving call 42
         agent.start_service(42);
@@ -121,8 +121,8 @@ mod tests {
 
     #[test]
     fn test_agent_idle_since_tracking() {
-        let mut agent = Agent::new(0, 0, Duration::from_secs(10));
-        assert_eq!(agent.idle_since(), Some(Duration::from_secs(10)));
+        let mut agent = Agent::new(0, 0);
+        assert_eq!(agent.idle_since(), Some(Duration::ZERO));
 
         agent.start_service(1);
         assert_eq!(agent.idle_since(), None);
@@ -138,7 +138,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Agent is already busy serving a call")]
     fn test_agent_cannot_start_service_when_busy() {
-        let mut agent = Agent::new(0, 0, Duration::from_secs(0));
+        let mut agent = Agent::new(0, 0);
         agent.start_service(1);
         agent.start_service(2); // Should panic
     }
@@ -146,7 +146,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Cannot end service - agent is not serving a call")]
     fn test_agent_cannot_end_service_when_idle() {
-        let mut agent = Agent::new(0, 0, Duration::from_secs(0));
+        let mut agent = Agent::new(0, 0);
         agent.end_service(Duration::from_secs(10)); // Should panic
     }
 }

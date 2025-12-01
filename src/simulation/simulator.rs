@@ -3,10 +3,13 @@
 use super::acd::Acd;
 use super::agent::Agent;
 use super::call::Call;
+use super::event::{Event, EventQueue, EventType};
+use super::queue::Queue;
 use super::{AgentId, AgentType, CallId, CallType};
 use crate::Float;
 use crate::distributions::Distribution;
 use crate::time::TimeUnit;
+use rand::RngCore;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
@@ -35,28 +38,6 @@ pub struct SimulationResult {
     calls: Vec<Call>,
 }
 
-/// Helper struct for serializing calls to CSV.
-#[derive(serde::Serialize)]
-struct CallCsvRow {
-    call_id: CallId,
-    call_type: CallType,
-    arrival_time_seconds: Float,
-    service_start_time_seconds: String,
-    service_end_time_seconds: String,
-    assigned_agent: String,
-}
-
-/// Helper struct for serializing calls to JSON.
-#[derive(serde::Serialize)]
-struct CallJsonRow {
-    call_id: CallId,
-    call_type: CallType,
-    arrival_time_seconds: Float,
-    service_start_time_seconds: Option<Float>,
-    service_end_time_seconds: Option<Float>,
-    assigned_agent: Option<AgentId>,
-}
-
 impl SimulationResult {
     /// Returns a reference to all calls in the simulation.
     pub fn calls(&self) -> &[Call] {
@@ -83,6 +64,16 @@ impl SimulationResult {
         file_path: &str,
         separator: Option<char>,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        #[derive(serde::Serialize)]
+        struct CallCsvRow {
+            call_id: CallId,
+            call_type: CallType,
+            arrival_time_seconds: Float,
+            service_start_time_seconds: String,
+            service_end_time_seconds: String,
+            assigned_agent: String,
+        }
+
         // Check if file already exists
         if Path::new(file_path).exists() {
             return Err(format!("File already exists: {}", file_path).into());
@@ -139,6 +130,16 @@ impl SimulationResult {
     /// - The file cannot be created
     /// - Writing to the file fails
     pub fn write_to_json_file(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        #[derive(serde::Serialize)]
+        struct CallJsonRow {
+            call_id: CallId,
+            call_type: CallType,
+            arrival_time_seconds: Float,
+            service_start_time_seconds: Option<Float>,
+            service_end_time_seconds: Option<Float>,
+            assigned_agent: Option<AgentId>,
+        }
+
         // Check if file already exists
         if Path::new(file_path).exists() {
             return Err(format!("File already exists: {}", file_path).into());
@@ -172,12 +173,99 @@ impl SimulationResult {
 /// # Arguments
 /// * `config` - Simulation configuration (agents, distributions, ACD)
 /// * `stop_time` - When to stop the simulation
+/// * `rng` - Random number generator
 ///
 /// # Returns
 /// * `SimulationResult` containing all processed calls and statistics
-pub fn simulate(_config: SimulationConfig, _stop_time: Duration) -> SimulationResult {
-    // TODO: Implement simulation logic
-    SimulationResult { calls: Vec::new() }
+pub fn simulate(
+    config: SimulationConfig,
+    stop_time: Duration,
+    rng: &mut dyn RngCore,
+) -> SimulationResult {
+    let mut agents = config.agents;
+    let mut event_queue = EventQueue::new();
+    let mut call_queue = Queue::new();
+    let mut calls: Vec<Call> = Vec::new();
+    let mut current_time = Duration::ZERO;
+
+    config
+        .arrival_distributions
+        .iter()
+        .map(|(call_type, distribution)| {
+            (
+                *call_type,
+                distribution.sample(current_time, rng) + current_time,
+            )
+        })
+        .filter(|(_, arrival_time)| *arrival_time < stop_time)
+        .for_each(|(call_type, arrival_time)| {
+            event_queue.push(Event::call_arrival(arrival_time, call_type))
+        });
+
+    while let Some(event) = event_queue.pop() {
+        current_time = event.time();
+
+        match event.event_type() {
+            EventType::CallArrival { call_type } => {
+                let call_id = calls.len();
+                let mut call = Call::new(call_id, *call_type, current_time);
+
+                let arrival_distribution = config.arrival_distributions.get(call_type).unwrap();
+                let next_arrival_time =
+                    arrival_distribution.sample(current_time, rng) + current_time;
+                if next_arrival_time < stop_time {
+                    event_queue.push(Event::call_arrival(next_arrival_time, *call_type));
+                }
+
+                let idle_agents: Vec<&Agent> =
+                    agents.iter().filter(|agent| agent.is_idle()).collect();
+                if let Some(agent_id) = config.acd.route(&call, &idle_agents) {
+                    call.start_service(current_time, agent_id);
+                    agents[agent_id].start_service(call_id);
+                    let service_distribution = config
+                        .service_distributions
+                        .get(&(agents[agent_id].agent_type(), call.call_type()))
+                        .unwrap();
+                    let service_time = service_distribution.sample(current_time, rng);
+                    event_queue.push(Event::service_end(
+                        current_time + service_time,
+                        call_id,
+                        agent_id,
+                    ));
+                } else {
+                    call_queue.enqueue(call_id);
+                }
+                calls.push(call);
+            }
+            EventType::ServiceEnd { call_id, agent_id } => {
+                calls[*call_id].end_service(current_time);
+                agents[*agent_id].end_service(current_time);
+
+                if current_time >= stop_time {
+                    continue;
+                }
+                let Some(call_id) = call_queue.dequeue() else {
+                    continue;
+                };
+                let call = &mut calls[call_id];
+
+                call.start_service(current_time, *agent_id);
+                agents[*agent_id].start_service(call_id);
+                let service_distribution = config
+                    .service_distributions
+                    .get(&(agents[*agent_id].agent_type(), call.call_type()))
+                    .unwrap();
+                let service_time = service_distribution.sample(current_time, rng);
+                event_queue.push(Event::service_end(
+                    current_time + service_time,
+                    call_id,
+                    *agent_id,
+                ));
+            }
+        }
+    }
+
+    SimulationResult { calls }
 }
 
 #[cfg(test)]
