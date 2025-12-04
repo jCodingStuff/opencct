@@ -14,7 +14,7 @@ pub trait Acd {
     ///
     /// # Arguments
     /// * `call` - The newly arrived call
-    /// * `idle_agents` - List of currently idle agents
+    /// * `idle_agents` - List of currently idle agents that could handle the call
     ///
     /// # Returns
     /// * `Some(agent_id)` if a match is found

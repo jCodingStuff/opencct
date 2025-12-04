@@ -11,7 +11,7 @@ pub struct Call {
     arrival_time: Duration,
     service_start_time: Option<Duration>,
     service_end_time: Option<Duration>,
-    assigned_agent: Option<AgentId>,
+    assigned_agent_id: Option<AgentId>,
 }
 
 impl Call {
@@ -23,7 +23,7 @@ impl Call {
             arrival_time,
             service_start_time: None,
             service_end_time: None,
-            assigned_agent: None,
+            assigned_agent_id: None,
         }
     }
 
@@ -54,9 +54,9 @@ impl Call {
         self.service_end_time
     }
 
-    /// Returns the agent assigned to this call, if any.
-    pub fn assigned_agent(&self) -> Option<AgentId> {
-        self.assigned_agent
+    /// Returns the ID of the agent assigned to this call, if any.
+    pub fn assigned_agent_id(&self) -> Option<AgentId> {
+        self.assigned_agent_id
     }
 
     // State transition methods
@@ -70,7 +70,7 @@ impl Call {
             "Cannot start service that has already started"
         );
         self.service_start_time = Some(time);
-        self.assigned_agent = Some(agent_id);
+        self.assigned_agent_id = Some(agent_id);
     }
 
     /// Ends service for this call.
@@ -123,7 +123,7 @@ mod tests {
         assert_eq!(call.arrival_time(), Duration::from_secs(10));
         assert!(call.service_start_time().is_none());
         assert!(call.service_end_time().is_none());
-        assert!(call.assigned_agent().is_none());
+        assert!(call.assigned_agent_id().is_none());
     }
 
     #[test]
@@ -133,7 +133,7 @@ mod tests {
         // Start service at t=10 with agent 3
         call.start_service(Duration::from_secs(10), 3);
         assert_eq!(call.service_start_time(), Some(Duration::from_secs(10)));
-        assert_eq!(call.assigned_agent(), Some(3));
+        assert_eq!(call.assigned_agent_id(), Some(3));
         assert_eq!(call.wait_time(), Some(Duration::from_secs(5)));
 
         // End service at t=25
